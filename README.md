@@ -1,2 +1,2 @@
 # target-iceberg
-Meltano tap used for writing to iceberg
+Meltano target used for writing to iceberg
