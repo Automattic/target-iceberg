@@ -41,7 +41,8 @@ class IcebergSink(BatchSink):
         partition_size = (os.cpu_count())*3
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
-            .setMaster("local[*]") \
+            .setMaster("local[*]")
+        """\
             .setAll([
                 ("spark.driver.memory", "4g"),
                 ("spark.executor.memory", "4g"),
@@ -59,7 +60,7 @@ class IcebergSink(BatchSink):
                 ('spark.sql.catalog.hive_catalog.type', 'hive'),
                 ('spark.sql.catalog.hive_catalog.uri', self.hive_thrift_uri),
                 ('spark.sql.catalog.hive_catalog.warehouse', self.warehouse_uri),
-            ])
+            ])"""
         spark = SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
 
         return spark
