@@ -64,7 +64,8 @@ class IcebergSink(BatchSink):
             record_flatten[new_name] = record_flatten.pop(old_name)
         super().process_record(record_flatten, context)
 
-    def get_spark_type(self, type_str):
+    def get_spark_type(self, col_type):
+        col_type = col_type[0] if isinstance(col_type, list) else col_type
         return {
             "string": StringType(),
             "integer": IntegerType(),
@@ -72,7 +73,7 @@ class IcebergSink(BatchSink):
             "float": DoubleType(),
             "boolean": BooleanType(),
             "timestamp": TimestampType(),
-        }[str(type_str).lower()]
+        }[col_type.lower()]
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
