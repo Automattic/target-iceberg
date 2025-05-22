@@ -73,6 +73,7 @@ class IcebergSink(BatchSink):
             "float": DoubleType(),
             "boolean": BooleanType(),
             "timestamp": TimestampType(),
+            "object": StructType(),
         }[col_type.lower()]
 
     def process_batch(self, context: dict) -> None:
