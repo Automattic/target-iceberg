@@ -19,12 +19,8 @@ class IcebergSink(BatchSink):
             stream_name=stream_name,
             key_properties=key_properties,
         )
-        # Accessing the properties from the target's config
         self.table_name = self.config.get("table_name")
         self.flatten_max_level = self.config.get("max_flatten_level", 100)
-        #self.hive_thrift_uri = self.config.get("hive_thrift_uri")
-        #self.warehouse_uri = self.config.get("warehouse_uri")
-        #self.partition_by = self.config.get("partition_by", [])
 
         # Extra fields
         self.extra_values = (
@@ -64,9 +60,6 @@ class IcebergSink(BatchSink):
                 self.extra_values.keys() == self.extra_values_types.keys()
             ), "extra_fields and extra_fields_types must have the same keys"
 
-    #def start_batch(self, context: dict) -> None:
-    #    self.rows = []
-
     def process_record(self, record: dict, context: dict) -> None:
         record_flatten = (
             flatten_record(
@@ -77,7 +70,6 @@ class IcebergSink(BatchSink):
             | self.extra_values
         )
         super().process_record(record_flatten, context)
-        #self.rows.append(record)
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
@@ -92,29 +84,10 @@ class IcebergSink(BatchSink):
         del context["records"]
 
     def init_spark(self):
-        partition_size = (os.cpu_count())*3
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
-            .setMaster("local[*]")
-        """\
-            .setAll([
-                ("spark.driver.memory", "4g"),
-                ("spark.executor.memory", "4g"),
-                ("spark.sql.shuffle.partitions", f"{partition_size}"),
-                ('spark.sql.adaptive.coalescePartitions.initialPartitionNum', f"{(os.cpu_count())}"),
-                ('spark.sql.adaptive.coalescePartitions.parallelismFirst', 'false'),
-                ('spark.sql.files.minPartitionNum', "1"),
-                ('spark.sql.files.maxPartitionBytes', '500mb'),
+            #.setMaster("local[*]")
 
-                # Add Iceberg SQL extensions like UPDATE or DELETE in Spark
-                ("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"),
-
-                # Register `hive_catalog`
-                ("spark.sql.catalog.hive_catalog", "org.apache.iceberg.spark.SparkCatalog"),
-                ('spark.sql.catalog.hive_catalog.type', 'hive'),
-                ('spark.sql.catalog.hive_catalog.uri', self.hive_thrift_uri),
-                ('spark.sql.catalog.hive_catalog.warehouse', self.warehouse_uri),
-            ])"""
         spark = SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
 
         return spark
@@ -122,45 +95,31 @@ class IcebergSink(BatchSink):
     def create_dataframe(self, spark: SparkSession, records: list):
         rows_rdd = spark.sparkContext.parallelize(records)
         rows = rows_rdd.map(lambda x: Row(**x))
-        # Function to clean field names
-        #def clean_field_name(name):
-            #return re.sub(r'[\s\.,]+', '_', name)
+        def clean_field_name(name):
+            return re.sub(r'[\s\.,]+', '_', name)
         df = spark.createDataFrame(rows)
-        #for col_name in df.columns:
-            #df = df.withColumnRenamed(col_name, clean_field_name(col_name))
+        for col_name in df.columns:
+            df = df.withColumnRenamed(col_name, clean_field_name(col_name))
         return df
 
     def create_table(self, spark: SparkSession, df: DataFrame):
-        #table_name = f"hive_catalog.default.{self.table_name}"
-
         # Check if the table exists
-        if spark.catalog.tableExists(self.table_name):
-            spark.sql(f"REFRESH TABLE {self.table_name}")
+        if not spark.catalog.tableExists(self.table_name):
+            column_definitions = ', '.join(
+                [f"{field.name} {field.dataType.simpleString()}" for field in df.schema.fields])
 
-        # Retrieve the schema of the DataFrame
-        schema = df.schema
+            create_table_query = f"""
+            CREATE TABLE IF NOT EXISTS {self.table_name} (
+                {column_definitions}
+            ) USING iceberg;
+            """
 
-        # Build a string of column definitions
-        column_definitions = ', '.join([f"{field.name} {field.dataType.simpleString()}" for field in schema.fields])
-
-        # Construct the partition clause based on self.partition_by
-        partition_clause = ""
-        #if self.partition_by:
-        #    partition_keys = ', '.join(self.partition_by)
-        #    partition_clause = f"PARTITIONED BY ({partition_keys})"
-
-        # SQL query to create the table
-        create_table_query = f"""
-        CREATE TABLE IF NOT EXISTS {self.table_name} (
-            {column_definitions}
-        ) USING iceberg {partition_clause};
-        """
-
-        # Execute the query
-        spark.sql(create_table_query)
+            self.logger.info(
+                f'Table {self.table_name} does not exist, so running create table statement:\n{create_table_query}'
+            )
+            spark.sql(create_table_query)
 
     def write_data(self, spark: SparkSession, df: DataFrame):
-        #table_name = f"hive_catalog.default.{self.table_name}"
         df \
         .writeTo(f"{self.table_name}") \
         .append()
