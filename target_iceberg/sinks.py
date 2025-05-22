@@ -69,6 +69,7 @@ class IcebergSink(BatchSink):
         return {
             "string": StringType(),
             "integer": IntegerType(),
+            "number": IntegerType(),
             "double": DoubleType(),
             "float": DoubleType(),
             "boolean": BooleanType(),
