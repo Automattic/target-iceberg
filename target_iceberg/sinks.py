@@ -9,6 +9,7 @@ from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
 from pyspark.sql.dataframe import DataFrame
+import re
 import os
 
 class IcebergSink(BatchSink):
