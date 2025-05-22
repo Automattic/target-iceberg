@@ -33,18 +33,17 @@ class TargetIceberg(Target):
             "max_flatten_level",
             th.IntegerType,
             description="Max level of nesting to flatten",
-            default=100,
+            default=0,
         ),
         th.Property(
-            "extra_fields",
-            th.StringType,
-            description="Extra fields to add to the flattened record. "
-            "(e.g. extra_col1=value1,extra_col2=value2)",
+            "skip_add_synced_field",
+            th.BooleanType,
+            description="Skip adding synced_ms column",
         ),
         th.Property(
-            "extra_fields_types",
+            "column_renames",
             th.StringType,
-            description="Extra fields types. (e.g. extra_col1=string,extra_col2=integer)",
+            description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
         ),
     ).to_dict()
 

@@ -1,6 +1,7 @@
 """Iceberg target sink class, which handles writing streams."""
 
 from __future__ import annotations
+from datetime import datetime
 
 from singer_sdk.helpers._flattening import flatten_schema, flatten_record
 from singer_sdk.sinks import BatchSink
@@ -21,26 +22,19 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         self.table_name = self.config.get("table_name")
-        self.flatten_max_level = self.config.get("max_flatten_level", 100)
-
-        # Extra fields
-        self.extra_values = (
-            dict([kv.split("=") for kv in self.config["extra_fields"].split(",")])
-            if self.config.get("extra_fields")
+        self.flatten_max_level = self.config.get("max_flatten_level", 0)
+        self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
+        self.column_renames = (
+            dict([kv.split("=") for kv in self.config["column_renames"].split(",")])
+            if self.config.get("column_renames")
             else {}
         )
-        self.extra_values_types = {}
-        if self.config.get("extra_fields_types"):
-            for field_type in self.config["extra_fields_types"].split(","):
-                field_name, _type = field_type.split("=")
-                self.extra_values_types[field_name] = {"type": [_type]}
 
         self.flatten_schema = flatten_schema(
             self.schema, max_level=self.flatten_max_level
         )
-        self.flatten_schema.get("properties", {}).update(self.extra_values_types)
-
-        self.validation()
+        self.flatten_schema.get("properties", {})
+        self.start_time_ms = int(datetime.utcnow().timestamp() * 1000)
 
     @property
     def max_size(self) -> int:
@@ -51,16 +45,6 @@ class IcebergSink(BatchSink):
         """
         return self.config.get("max_batch_size", 10000)
 
-    def validation(self) -> None:
-        """Extra fields and Partition Cols validation."""
-        assert bool(self.extra_values) == bool(
-            self.extra_values_types
-        ), "extra_fields and extra_fields_types must be both set or both unset"
-        if self.extra_values:
-            assert (
-                self.extra_values.keys() == self.extra_values_types.keys()
-            ), "extra_fields and extra_fields_types must have the same keys"
-
     def process_record(self, record: dict, context: dict) -> None:
         record_flatten = (
             flatten_record(
@@ -68,7 +52,7 @@ class IcebergSink(BatchSink):
                 flattened_schema=self.flatten_schema,
                 max_level=self.flatten_max_level,
             )
-            | self.extra_values
+            | { "synced_ms": self.start_time_ms } if not self.skip_add_synced_field else {}
         )
         super().process_record(record_flatten, context)
 
@@ -97,8 +81,10 @@ class IcebergSink(BatchSink):
         rows_rdd = spark.sparkContext.parallelize(records)
         rows = rows_rdd.map(lambda x: Row(**x))
         def clean_field_name(name):
-            return re.sub(r'[\s\.,]+', '_', name)
+            return re.sub(r'[\s\.,]+', '_', name).lower()
         df = spark.createDataFrame(rows)
+        for old, new in self.column_renames.items():
+            df = df.withColumnRenamed(old, new)
         for col_name in df.columns:
             df = df.withColumnRenamed(col_name, clean_field_name(col_name))
         return df
