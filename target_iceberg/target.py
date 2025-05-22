@@ -17,23 +17,34 @@ class TargetIceberg(Target):
 
     config_jsonschema = th.PropertiesList(
         th.Property(
-            "filepath",
+            "table_name",
             th.StringType,
-            title="Output File Path",
-            description="The path to the target output file",
+            title="Table name",
+            description="Output table name e.g. some_db.some_table",
         ),
         th.Property(
-            "file_naming_scheme",
-            th.StringType,
-            title="File Naming Scheme",
-            description="The scheme with which output files will be named",
+            "max_batch_size",
+            th.IntegerType,
+            description="Max records to write in one batch. "
+            "It can control the memory usage of the target.",
+            default=10000,
         ),
         th.Property(
-            "auth_token",
+            "max_flatten_level",
+            th.IntegerType,
+            description="Max level of nesting to flatten",
+            default=100,
+        ),
+        th.Property(
+            "extra_fields",
             th.StringType,
-            secret=True,  # Flag config as protected.
-            title="Auth Token",
-            description="The path to the target output file",
+            description="Extra fields to add to the flattened record. "
+            "(e.g. extra_col1=value1,extra_col2=value2)",
+        ),
+        th.Property(
+            "extra_fields_types",
+            th.StringType,
+            description="Extra fields types. (e.g. extra_col1=string,extra_col2=integer)",
         ),
     ).to_dict()
 
