@@ -44,6 +44,9 @@ class IcebergSink(BatchSink):
         )
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
 
+        missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
+        assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
+
     @property
     def max_size(self) -> int:
         """Get max batch size.
@@ -64,7 +67,7 @@ class IcebergSink(BatchSink):
         record_flatten = {
             # Convert decimal values to double to avoid type mismatch exceptions
             k: float(v) if isinstance(v, Decimal)
-            else v.isoformat() if isinstance(v, datetime)
+            else v.isoformat() if isinstance(v, (datetime, date))
             else v
             for k, v in record_flatten.items()
         }
@@ -73,13 +76,15 @@ class IcebergSink(BatchSink):
         super().process_record(record_flatten, context)
 
     def get_spark_type(self, col_type):
-        col_type = col_type[0] if isinstance(col_type, list) else col_type
+        # type can be a value or a list e.g. ["null", "string"]
+        col_type_list = col_type if isinstance(col_type, list) else list(col_type)
+        col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
+        col_type = next(iter(col_type_list), None)
         return {
             "string": StringType(),
             "integer": IntegerType(),
             "number": DoubleType(),
             "boolean": BooleanType(),
-            "timestamp": TimestampType(),
             "object": StringType(),
             "array": StringType(),
         }[col_type.lower()]
