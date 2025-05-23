@@ -61,6 +61,11 @@ class IcebergSink(BatchSink):
             )
             | { "synced_ms": self.start_time } if not self.skip_add_synced_field else {}
         )
+        st = ""
+        for key, value in record_flatten.items():
+            st += f"{key}={value},type:{type(value).__name__}"
+        if st:
+            raise Exception(st)
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
         # Convert decimal values to double to avoid type mismatch exceptions
