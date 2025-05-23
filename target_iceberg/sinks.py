@@ -54,6 +54,8 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
+        if context:
+            raise Exception(context)
         record_flatten = flatten_record(
             record,
             flattened_schema=self.flatten_schema,
