@@ -1,6 +1,8 @@
 """Iceberg target sink class, which handles writing streams."""
 
 from __future__ import annotations
+
+from botocore.retryhandler import EXCEPTION_MAP
 from datetime import datetime
 from decimal import Decimal
 
@@ -42,6 +44,7 @@ class IcebergSink(BatchSink):
             else {}
         )
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
+        raise Exception(key_properties)
 
     @property
     def max_size(self) -> int:
