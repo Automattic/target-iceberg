@@ -77,9 +77,8 @@ class IcebergSink(BatchSink):
 
     def get_spark_type(self, col_type):
         # type can be a value or a list e.g. ["null", "string"]
-        col_type_list = col_type if isinstance(col_type, list) else list(col_type)
+        col_type_list = col_type if isinstance(col_type, list) else [col_type]
         col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
-        col_type = next(iter(col_type_list), None)
         return {
             "string": StringType(),
             "integer": IntegerType(),
@@ -87,7 +86,7 @@ class IcebergSink(BatchSink):
             "boolean": BooleanType(),
             "object": StringType(),
             "array": StringType(),
-        }[col_type.lower()]
+        }[col_type_list[0].lower()]
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
