@@ -53,13 +53,10 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
-        record_flatten = (
-            flatten_record(
-                record,
-                flattened_schema=self.flatten_schema,
-                max_level=self.flatten_max_level,
-            )
-            | { "synced_ms": self.start_time } if not self.skip_add_synced_field else {}
+        record_flatten = flatten_record(
+            record,
+            flattened_schema=self.flatten_schema,
+            max_level=self.flatten_max_level,
         )
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
@@ -70,6 +67,8 @@ class IcebergSink(BatchSink):
             else v
             for k, v in record_flatten.items()
         }
+        if not self.skip_add_synced_field:
+            record_flatten = record_flatten | { "synced_ms": self.start_time }
         super().process_record(record_flatten, context)
 
     def get_spark_type(self, col_type):
