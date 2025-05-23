@@ -44,7 +44,7 @@ class IcebergSink(BatchSink):
             else {}
         )
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
-        raise Exception(key_properties)
+        raise Exception(str(key_properties))
 
     @property
     def max_size(self) -> int:
