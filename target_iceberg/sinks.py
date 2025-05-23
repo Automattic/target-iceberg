@@ -84,6 +84,7 @@ class IcebergSink(BatchSink):
             "integer": IntegerType(),
             "number": DoubleType(),
             "boolean": BooleanType(),
+            "timestamp": TimestampType(),
             "object": StringType(),
             "array": StringType(),
         }[col_type_list[0].lower()]
