@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from botocore.retryhandler import EXCEPTION_MAP
 from datetime import datetime
 from decimal import Decimal
 
@@ -44,6 +43,7 @@ class IcebergSink(BatchSink):
             else {}
         )
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
+        raise Exception(str(key_properties))
 
     @property
     def max_size(self) -> int:
@@ -55,8 +55,6 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
-        if self.key_properties:
-            raise Exception(str(self.key_properties))
         record_flatten = flatten_record(
             record,
             flattened_schema=self.flatten_schema,
