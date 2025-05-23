@@ -61,15 +61,15 @@ class IcebergSink(BatchSink):
             )
             | { "synced_ms": self.start_time } if not self.skip_add_synced_field else {}
         )
-        st = ""
-        for key, value in record_flatten.items():
-            st += f"{key}={value},type:{type(value).__name__}"
-        if st:
-            raise Exception(st)
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
-        # Convert decimal values to double to avoid type mismatch exceptions
-        record_flatten = {k: float(v) if isinstance(v, Decimal) else v for k, v in record_flatten.items()}
+        record_flatten = {
+            # Convert decimal values to double to avoid type mismatch exceptions
+            k: float(v) if isinstance(v, Decimal)
+            else v.isoformat() if isinstance(v, datetime)
+            else v
+            for k, v in record_flatten.items()
+        }
         super().process_record(record_flatten, context)
 
     def get_spark_type(self, col_type):
