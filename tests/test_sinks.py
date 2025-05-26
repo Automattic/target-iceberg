@@ -1,5 +1,3 @@
-"""Tests standard target features using the built-in SDK tests library."""
-
 from __future__ import annotations
 
 import typing as t
