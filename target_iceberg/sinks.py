@@ -25,7 +25,7 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
-        self.table_name = f"{self.config['db_name']}.raw_{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}"
+        self.table_name = f"{self.config['db_name'] if self.config.get('prod') else 'scratch'}.{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}"
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
 
