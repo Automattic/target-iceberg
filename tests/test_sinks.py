@@ -4,7 +4,7 @@ import typing as t
 
 import pytest
 from unittest import mock
-from pyspark.sql.types import StringType
+from pyspark.sql.types import StringType, TimestampType
 from target_iceberg.sinks import IcebergSink
 
 TEST_CONFIG = {"table_name": "test", "column_renames": "old1=new1,old2=new2"}
@@ -31,6 +31,6 @@ def test_type_conversion():
 
     sink = IcebergSink(target, TEST_SCHEMA, "test", {})
 
-    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col1"]["type"]) == StringType()
-    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col2"]["type"]) == StringType()
+    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col1"]) == StringType()
+    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col2"]) == TimestampType()
 

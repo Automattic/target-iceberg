@@ -67,7 +67,7 @@ class IcebergSink(BatchSink):
         record_flatten = {
             # Convert decimal values to double to avoid type mismatch exceptions
             k: float(v) if isinstance(v, Decimal)
-            else v.isoformat() if isinstance(v, (datetime, date))
+            #else v.isoformat() if isinstance(v, (datetime, date))
             else v
             for k, v in record_flatten.items()
         }
@@ -75,19 +75,24 @@ class IcebergSink(BatchSink):
             record_flatten = record_flatten | { "synced_ms": self.start_time }
         super().process_record(record_flatten, context)
 
-    def get_spark_type(self, col_type):
-        # type can be a value or a list e.g. ["null", "string"]
-        col_type_list = col_type if isinstance(col_type, list) else [col_type]
-        col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
-        return {
-            "string": StringType(),
-            "integer": IntegerType(),
-            "number": DoubleType(),
-            "boolean": BooleanType(),
-            "timestamp": TimestampType(),
-            "object": StringType(),
-            "array": StringType(),
-        }[col_type_list[0].lower()]
+    def get_spark_type(self, col):
+        col_type = col["type"]
+        if col.get("format") in ["date", "date-time"]:
+            return TimestampType()
+        else:
+            # type can be a value or a list e.g. ["null", "string"]
+            col_type_list = col_type if isinstance(col_type, list) else [col_type]
+            col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
+            col_type = col_type_list[0].lower()
+            return {
+                "string": StringType(),
+                "integer": IntegerType(),
+                "number": DoubleType(),
+                "boolean": BooleanType(),
+                "timestamp": TimestampType(),
+                "object": StringType(),
+                "array": StringType(),
+            }[col_type]
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
@@ -95,7 +100,7 @@ class IcebergSink(BatchSink):
         )
 
         schema = StructType([
-            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype["type"]), True)
+            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
             for name, dtype in self.flatten_schema["properties"].items()
         ])
         spark = self.init_spark()
