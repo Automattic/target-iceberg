@@ -7,7 +7,7 @@ from unittest import mock
 from pyspark.sql.types import StringType, TimestampType
 from target_iceberg.sinks import IcebergSink
 
-TEST_CONFIG = {"table_name": "test", "column_renames": "old1=new1,old2=new2"}
+TEST_CONFIG = {"db_name": "test_db", "column_renames": "old1=new1,old2=new2"}
 TEST_SCHEMA = {"properties": {
         "old1": {"type": "string"},
         "old2": {"type": "string"},
@@ -34,3 +34,6 @@ def test_type_conversion():
     assert sink.get_spark_type(TEST_SCHEMA["properties"]["col1"]) == StringType()
     assert sink.get_spark_type(TEST_SCHEMA["properties"]["col2"]) == TimestampType()
 
+
+def test_to_snake_case():
+    assert IcebergSink.to_snake_case("CamelCase") == "camel_case"

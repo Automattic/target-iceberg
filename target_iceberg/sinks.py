@@ -24,7 +24,8 @@ class IcebergSink(BatchSink):
             stream_name=stream_name,
             key_properties=key_properties,
         )
-        self.table_name = self.config.get("table_name")
+        table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
+        self.table_name = f"{self.config['db_name']}.raw_{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}"
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
 
@@ -46,6 +47,10 @@ class IcebergSink(BatchSink):
 
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
+
+    @staticmethod
+    def to_snake_case(text: str):
+        return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
 
     @property
     def max_size(self) -> int:

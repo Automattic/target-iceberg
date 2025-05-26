@@ -17,10 +17,16 @@ class TargetIceberg(Target):
 
     config_jsonschema = th.PropertiesList(
         th.Property(
-            "table_name",
+            "db_name",
             th.StringType,
-            title="Table name",
-            description="Output table name e.g. some_db.some_table",
+            title="Db name",
+            description="Output Db name e.g. some_db. Table name is derived from stream name automatically.",
+        ),
+        th.Property(
+            "table_name_prefix",
+            th.StringType,
+            title="Table name prefix",
+            description="Additional table name prefix e.g. 'a4a' would result in a table name like 'my_db.a4a_raw_users'.",
         ),
         th.Property(
             "max_batch_size",
