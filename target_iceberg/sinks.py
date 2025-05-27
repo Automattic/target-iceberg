@@ -12,7 +12,7 @@ from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
 from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import StructType, StructField, StringType, IntegerType, DoubleType, BooleanType, TimestampType
+from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, BooleanType, TimestampType
 import re
 import os
 
@@ -90,7 +90,7 @@ class IcebergSink(BatchSink):
             col_type = col_type_list[0].lower()
             return {
                 "string": StringType(),
-                "integer": IntegerType(),
+                "integer": LongType(),
                 "number": DoubleType(),
                 "boolean": BooleanType(),
                 "timestamp": TimestampType(),
