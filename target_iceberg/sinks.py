@@ -48,6 +48,11 @@ class IcebergSink(BatchSink):
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
 
+        self.spark_schema = StructType([
+            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
+            for name, dtype in self.flatten_schema["properties"].items()
+        ])
+
     @staticmethod
     def to_snake_case(text: str):
         return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
@@ -71,7 +76,8 @@ class IcebergSink(BatchSink):
             record_flatten[new_name] = record_flatten.pop(old_name)
         record_flatten = {
             # Convert decimal values to double to avoid type mismatch exceptions
-            k: float(v) if isinstance(v, Decimal)
+            k: float(v) if isinstance(v, Decimal) or (
+                    isinstance(v, int) and isinstance(self.spark_schema[k].datatype, DoubleType))
             else v
             for k, v in record_flatten.items()
         }
@@ -102,13 +108,8 @@ class IcebergSink(BatchSink):
         self.logger.info(
             f'Processing batch for {self.stream_name} with {len(context["records"])} records.'
         )
-
-        schema = StructType([
-            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
-            for name, dtype in self.flatten_schema["properties"].items()
-        ])
         spark = self.init_spark()
-        df = spark.createDataFrame(context.get("records", []), schema=schema)
+        df = spark.createDataFrame(context.get("records", []), schema=self.spark_schema)
         self.create_table(spark, df)
         self.write_data(spark, df)
 
