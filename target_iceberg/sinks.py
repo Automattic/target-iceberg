@@ -75,9 +75,8 @@ class IcebergSink(BatchSink):
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
         record_flatten = {
-            # Convert decimal values to double to avoid type mismatch exceptions
-            k: float(v) if isinstance(v, Decimal) or (
-                    isinstance(v, int) and isinstance(self.spark_schema[k].datatype, DoubleType))
+            # Convert decimal and int values to double to avoid type mismatch exceptions
+            k: float(v) if isinstance(self.spark_schema[k].datatype, DoubleType)
             else v
             for k, v in record_flatten.items()
         }
