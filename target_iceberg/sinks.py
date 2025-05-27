@@ -72,7 +72,6 @@ class IcebergSink(BatchSink):
         record_flatten = {
             # Convert decimal values to double to avoid type mismatch exceptions
             k: float(v) if isinstance(v, Decimal)
-            #else v.isoformat() if isinstance(v, (datetime, date))
             else v
             for k, v in record_flatten.items()
         }
