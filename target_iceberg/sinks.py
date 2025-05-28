@@ -67,6 +67,31 @@ class IcebergSink(BatchSink):
         """
         return self.config.get("max_batch_size", 10000)
 
+    def _write_state_message(self, state: dict) -> None:
+        def find_decimals(obj, path=""):
+            decimals = []
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    new_path = f"{path}.{k}" if path else k
+                    decimals.extend(find_decimals(v, new_path))
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    new_path = f"{path}[{i}]"
+                    decimals.extend(find_decimals(item, new_path))
+            elif isinstance(obj, Decimal):
+                decimals.append((path, obj))
+            return decimals
+
+        decimals_found = find_decimals(state)
+
+        if decimals_found:
+            msg = "State contains unserializable Decimal values:\n"
+            msg += "\n".join([f"{path} = {value}" for path, value in decimals_found])
+            raise TypeError(msg)
+
+        super()._write_state_message(state)
+
+
     def process_record(self, record: dict, context: dict) -> None:
         record_flatten = flatten_record(
             record,
