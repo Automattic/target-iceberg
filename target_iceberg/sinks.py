@@ -17,6 +17,7 @@ import re
 import os
 
 class IcebergSink(BatchSink):
+    spark = None
     def __init__(self, target, schema, stream_name, key_properties) -> None:
         super().__init__(
             target=target,
@@ -54,6 +55,9 @@ class IcebergSink(BatchSink):
         ])
         self.spark_schema_field_set = set(self.spark_schema.fieldNames())
         self.spark = self.init_spark()
+        if IcebergSink.spark is None:
+            IcebergSink.spark = self.init_spark()
+        self.spark = IcebergSink.spark
 
     @staticmethod
     def to_snake_case(text: str):
