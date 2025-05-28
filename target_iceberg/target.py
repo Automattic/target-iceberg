@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from singer_sdk import typing as th
 from singer_sdk.target_base import Target
+from decimal import Decimal
 
 from target_iceberg.sinks import (
     IcebergSink,
@@ -55,8 +56,7 @@ class TargetIceberg(Target):
 
     default_sink_class = IcebergSink
 
-
-    def process_endofpipe(self) -> None:
+    def _write_state_message(self, state: dict) -> None:
         def find_decimals(obj, path=""):
             decimals = []
             if isinstance(obj, dict):
@@ -71,14 +71,14 @@ class TargetIceberg(Target):
                 decimals.append((path, obj))
             return decimals
 
-        decimals_found = find_decimals(self._latest_state)
+        decimals_found = find_decimals(state)
 
         if decimals_found:
             msg = "State contains unserializable Decimal values:\n"
             msg += "\n".join([f"{path} = {value}" for path, value in decimals_found])
             raise TypeError(msg)
-        else:
-            raise Exception(f"Nie znaleziono decimal: {self._latest_state}")
+
+        super()._write_state_message(state)
 
 
 if __name__ == "__main__":
