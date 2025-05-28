@@ -120,6 +120,11 @@ class IcebergSink(BatchSink):
         del context["records"]
 
     def init_spark(self):
+        # Reuse existing SparkSession if available
+        spark = SparkSession.getActiveSession()
+        if spark is not None:
+            return spark
+
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
             .setMaster("local[*]")
