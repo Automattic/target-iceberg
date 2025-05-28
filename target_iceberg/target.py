@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from singer_sdk import typing as th
 from singer_sdk.target_base import Target
 from decimal import Decimal
 
-from target_iceberg.sinks import (
-    IcebergSink,
-)
+from target_iceberg.sinks import IcebergSink
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder for Decimal used in state."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 
 class TargetIceberg(Target):
@@ -56,20 +63,13 @@ class TargetIceberg(Target):
 
     default_sink_class = IcebergSink
 
-    @staticmethod
-    def convert_decimals(obj):
-        if isinstance(obj, Decimal):
-            return float(obj)
-        elif isinstance(obj, dict):
-            return {k: TargetIceberg.convert_decimals(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return list(TargetIceberg.convert_decimals(v) for v in obj)
-        else:
-            return obj
 
     def _write_state_message(self, state: dict) -> None:
-        # Convert decimals to float, because json.dumps fails with serialization error when encountering decimals
-        super()._write_state_message(TargetIceberg.convert_decimals(state))
+        """Emit the stream's latest state."""
+        state_json = json.dumps(state, cls=DecimalEncoder)
+        self.logger.info("Emitting completed target state %s", state_json)
+        sys.stdout.write(f"{state_json}\n")
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":
