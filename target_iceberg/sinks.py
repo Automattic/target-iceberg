@@ -52,6 +52,7 @@ class IcebergSink(BatchSink):
             StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
             for name, dtype in self.flatten_schema["properties"].items()
         ])
+        self.spark_schema_field_set = set(self.spark_schema.fieldNames())
 
     @staticmethod
     def to_snake_case(text: str):
@@ -76,8 +77,8 @@ class IcebergSink(BatchSink):
             record_flatten[new_name] = record_flatten.pop(old_name)
         record_flatten = {
             # Convert decimal and int values to double to avoid type mismatch exceptions
-            k: float(v) if isinstance(v, Decimal) or (
-                    isinstance(v, int) and isinstance(getattr(self.spark_schema.get(k), "dataType", None), DoubleType))
+            k: float(v) if isinstance(v, Decimal) or (isinstance(v, int) and k in self.spark_schema_field_set
+                                                      and isinstance(self.spark_schema[k].dataType, DoubleType))
             else v
             for k, v in record_flatten.items()
         }
