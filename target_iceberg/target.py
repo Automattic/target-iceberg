@@ -56,5 +56,30 @@ class TargetIceberg(Target):
     default_sink_class = IcebergSink
 
 
+    def process_endofpipe(self) -> None:
+        def find_decimals(obj, path=""):
+            decimals = []
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    new_path = f"{path}.{k}" if path else k
+                    decimals.extend(find_decimals(v, new_path))
+            elif isinstance(obj, list):
+                for i, item in enumerate(obj):
+                    new_path = f"{path}[{i}]"
+                    decimals.extend(find_decimals(item, new_path))
+            elif isinstance(obj, Decimal):
+                decimals.append((path, obj))
+            return decimals
+
+        decimals_found = find_decimals(self._latest_state)
+
+        if decimals_found:
+            msg = "State contains unserializable Decimal values:\n"
+            msg += "\n".join([f"{path} = {value}" for path, value in decimals_found])
+            raise TypeError(msg)
+        else:
+            raise Exception(f"Nie znaleziono decimal: {self._latest_state}")
+
+
 if __name__ == "__main__":
     TargetIceberg.cli()
