@@ -56,29 +56,20 @@ class TargetIceberg(Target):
 
     default_sink_class = IcebergSink
 
+    @staticmethod
+    def convert_decimals(obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        elif isinstance(obj, dict):
+            return {k: convert_decimals(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return list(convert_decimals(v) for v in obj)
+        else:
+            return obj
+
     def _write_state_message(self, state: dict) -> None:
-        def find_decimals(obj, path=""):
-            decimals = []
-            if isinstance(obj, dict):
-                for k, v in obj.items():
-                    new_path = f"{path}.{k}" if path else k
-                    decimals.extend(find_decimals(v, new_path))
-            elif isinstance(obj, list):
-                for i, item in enumerate(obj):
-                    new_path = f"{path}[{i}]"
-                    decimals.extend(find_decimals(item, new_path))
-            elif isinstance(obj, Decimal):
-                decimals.append((path, obj))
-            return decimals
-
-        decimals_found = find_decimals(state)
-
-        if decimals_found:
-            msg = "State contains unserializable Decimal values:\n"
-            msg += "\n".join([f"{path} = {value}" for path, value in decimals_found])
-            raise TypeError(msg)
-
-        super()._write_state_message(state)
+        # Convert decimals to float, because json.dumps fails with serialization error when encountering decimals
+        super()._write_state_message(TargetIceberg.convert_decimals(state))
 
 
 if __name__ == "__main__":
