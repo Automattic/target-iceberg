@@ -73,12 +73,15 @@ class IcebergSink(BatchSink):
             flattened_schema=self.flatten_schema,
             max_level=self.flatten_max_level,
         )
+        # rename columns
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
+        # filter out fields which aren't properly defined in schema
+        record_flatten = {k: v for k, v in record_flatten.items() if k in self.spark_schema_field_set}
         record_flatten = {
             # Convert decimal and int values to double to avoid type mismatch exceptions
-            k: float(v) if isinstance(v, Decimal) or (isinstance(v, int) and k in self.spark_schema_field_set
-                                                      and isinstance(self.spark_schema[k].dataType, DoubleType))
+            k: float(v) if isinstance(v, Decimal) or (
+                    isinstance(v, int) and isinstance(self.spark_schema[k].dataType, DoubleType))
             else v
             for k, v in record_flatten.items()
         }
