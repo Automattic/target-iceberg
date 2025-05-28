@@ -61,9 +61,9 @@ class TargetIceberg(Target):
         if isinstance(obj, Decimal):
             return float(obj)
         elif isinstance(obj, dict):
-            return {k: convert_decimals(v) for k, v in obj.items()}
+            return {k: TargetIceberg.convert_decimals(v) for k, v in obj.items()}
         elif isinstance(obj, list):
-            return list(convert_decimals(v) for v in obj)
+            return list(TargetIceberg.convert_decimals(v) for v in obj)
         else:
             return obj
 
