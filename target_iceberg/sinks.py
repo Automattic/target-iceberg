@@ -53,6 +53,7 @@ class IcebergSink(BatchSink):
             for name, dtype in self.flatten_schema["properties"].items()
         ])
         self.spark_schema_field_set = set(self.spark_schema.fieldNames())
+        self.spark = self.init_spark()
 
     @staticmethod
     def to_snake_case(text: str):
@@ -112,10 +113,9 @@ class IcebergSink(BatchSink):
         self.logger.info(
             f'Processing batch for {self.stream_name} with {len(context["records"])} records.'
         )
-        spark = self.init_spark()
-        df = spark.createDataFrame(context.get("records", []), schema=self.spark_schema)
-        self.create_table(spark, df)
-        self.write_data(spark, df)
+        df = self.spark.createDataFrame(context.get("records", []), schema=self.spark_schema)
+        self.create_table(self.spark, df)
+        self.write_data(self.spark, df)
 
         del context["records"]
 
@@ -128,9 +128,7 @@ class IcebergSink(BatchSink):
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark")
 
-        spark = SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
-
-        return spark
+        return SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
 
     def create_dataframe(self, spark: SparkSession, records: list, schema: StructType) -> DataFrame:
         spark.createDataFrame(records, schema=schema)
