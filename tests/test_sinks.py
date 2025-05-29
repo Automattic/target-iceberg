@@ -25,15 +25,5 @@ def test_initialization():
     assert sink.column_renames == {'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
 
 
-def test_type_conversion():
-    target = mock.Mock()
-    target.config = TEST_CONFIG
-
-    sink = IcebergSink(target, TEST_SCHEMA, "test", {})
-
-    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col1"]) == StringType()
-    assert sink.get_spark_type(TEST_SCHEMA["properties"]["col2"]) == TimestampType()
-
-
 def test_to_snake_case():
     assert IcebergSink.to_snake_case("CamelCase") == "camel_case"

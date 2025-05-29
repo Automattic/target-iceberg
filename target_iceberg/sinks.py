@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from decimal import Decimal
+import os
+import re
+from datetime import datetime
+from functools import cached_property
 
-from singer_sdk.helpers._flattening import flatten_schema, flatten_record
+from pyiceberg.catalog import load_catalog
+from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
-from pyspark import SparkConf
-from pyspark.sql import SparkSession
-from pyspark.sql import Row
-from pyspark.sql.dataframe import DataFrame
-from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, BooleanType, TimestampType
-import re
-import os
+from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema
 
 class IcebergSink(BatchSink):
     spark = None
@@ -26,13 +23,12 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
-        self.table_name = f"{self.config['db_name'] if self.config.get('prod') else 'scratch'}.{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}"
+        self.table_name = (f"{self.config['db_name'] if self.config.get('prod') else 'scratch'}."
+                           f"{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}")
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
 
-        self.flatten_schema = flatten_schema(
-            self.schema, max_level=self.flatten_max_level
-        )
+        self.flatten_schema = flatten_schema(self.schema, max_level=self.flatten_max_level)
         if not self.skip_add_synced_field:
             self.flatten_schema.get("properties", {}).update({"synced_ms": {"type": "timestamp"}})
         self.start_time = datetime.utcnow()
@@ -49,15 +45,15 @@ class IcebergSink(BatchSink):
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
 
-        self.spark_schema = StructType([
-            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
-            for name, dtype in self.flatten_schema["properties"].items()
-        ])
-        self.spark_schema_field_set = set(self.spark_schema.fieldNames())
-        self.spark = self.init_spark()
-        if IcebergSink.spark is None:
-            IcebergSink.spark = self.init_spark()
-        self.spark = IcebergSink.spark
+        self.pyarrow_schema = flatten_schema_to_pyarrow_schema(self.flatten_schema, self.column_renames)
+
+    @cached_property
+    def catalog(self):
+        return load_catalog("default")
+
+    @cached_property
+    def table(self):
+        return self.get_table()
 
     @staticmethod
     def to_snake_case(text: str):
@@ -73,88 +69,33 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
-        record_flatten = flatten_record(
-            record,
-            flattened_schema=self.flatten_schema,
-            max_level=self.flatten_max_level,
+        record_flatten = (
+            flatten_record(
+                record,
+                flattened_schema=self.flatten_schema,
+                max_level=self.flatten_max_level,
+            )
         )
-        # rename columns
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
-        # filter out fields which aren't properly defined in schema
-        record_flatten = {k: v for k, v in record_flatten.items() if k in self.spark_schema_field_set}
-        record_flatten = {
-            # Convert decimal and int values to double to avoid type mismatch exceptions
-            k: float(v) if isinstance(v, Decimal) or (
-                    isinstance(v, int) and isinstance(self.spark_schema[k].dataType, DoubleType))
-            else v
-            for k, v in record_flatten.items()
-        }
         if not self.skip_add_synced_field:
             record_flatten = record_flatten | { "synced_ms": self.start_time }
         super().process_record(record_flatten, context)
-
-    def get_spark_type(self, col):
-        col_type = col["type"]
-        if col.get("format") in ["date", "date-time"]:
-            return TimestampType()
-        else:
-            # type can be a value or a list e.g. ["null", "string"]
-            col_type_list = col_type if isinstance(col_type, list) else [col_type]
-            col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
-            col_type = col_type_list[0].lower()
-            return {
-                "string": StringType(),
-                "integer": LongType(),
-                "number": DoubleType(),
-                "boolean": BooleanType(),
-                "timestamp": TimestampType(),
-                "object": StringType(),
-                "array": StringType(),
-            }[col_type]
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
             f'Processing batch for {self.stream_name} with {len(context["records"])} records.'
         )
-        df = self.spark.createDataFrame(context.get("records", []), schema=self.spark_schema)
-        self.create_table(self.spark, df)
-        self.write_data(self.spark, df)
-
+        pyarrow_df = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
+        self.logger.info(
+            f"Pyarrow table size: {pyarrow_df.nbytes} | ({len(pyarrow_df)} rows)"
+        )
+        self.table.append(pyarrow_df)
         del context["records"]
 
-    def init_spark(self):
-        # Reuse existing SparkSession if available
-        spark = SparkSession.getActiveSession()
-        if spark is not None:
-            return spark
-
-        conf = SparkConf() \
-            .setAppName("Apache Iceberg with PySpark") \
-            .setMaster("yarn")
-
-        return SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
-
-    def create_dataframe(self, spark: SparkSession, records: list, schema: StructType) -> DataFrame:
-        spark.createDataFrame(records, schema=schema)
-
-    def create_table(self, spark: SparkSession, df: DataFrame):
-        if not spark.catalog.tableExists(self.table_name):
-            column_definitions = ', '.join(
-                [f"{field.name} {field.dataType.simpleString()}" for field in df.schema.fields])
-
-            create_table_query = f"""
-            CREATE TABLE IF NOT EXISTS {self.table_name} (
-                {column_definitions}
-            ) USING iceberg;
-            """
-
-            self.logger.info(
-                f'Table {self.table_name} does not exist, so running create table statement:\n{create_table_query}'
-            )
-            spark.sql(create_table_query)
-
-    def write_data(self, spark: SparkSession, df: DataFrame):
-        df \
-        .writeTo(f"{self.table_name}") \
-        .append()
+    def get_table(self):
+        if not self.catalog.table_exists(self.table_name):
+            self.logger.info(f'Table {self.table_name} does not exist, so creating it')
+            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+        else:
+            return self.catalog.load_table(self.table_name)
