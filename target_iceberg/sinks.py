@@ -131,7 +131,7 @@ class IcebergSink(BatchSink):
 
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
-            .setMaster("local[*]")
+            .setMaster("yarn")
 
         return SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
 
