@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
+
 from singer_sdk.helpers._flattening import flatten_schema, flatten_record
 from singer_sdk.sinks import BatchSink
 
@@ -9,10 +12,12 @@ from pyspark import SparkConf
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
 from pyspark.sql.dataframe import DataFrame
+from pyspark.sql.types import StructType, StructField, StringType, LongType, DoubleType, BooleanType, TimestampType
 import re
 import os
 
 class IcebergSink(BatchSink):
+    spark = None
     def __init__(self, target, schema, stream_name, key_properties) -> None:
         super().__init__(
             target=target,
@@ -20,27 +25,43 @@ class IcebergSink(BatchSink):
             stream_name=stream_name,
             key_properties=key_properties,
         )
-        self.table_name = self.config.get("table_name")
-        self.flatten_max_level = self.config.get("max_flatten_level", 100)
-
-        # Extra fields
-        self.extra_values = (
-            dict([kv.split("=") for kv in self.config["extra_fields"].split(",")])
-            if self.config.get("extra_fields")
-            else {}
-        )
-        self.extra_values_types = {}
-        if self.config.get("extra_fields_types"):
-            for field_type in self.config["extra_fields_types"].split(","):
-                field_name, _type = field_type.split("=")
-                self.extra_values_types[field_name] = {"type": [_type]}
+        table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
+        self.table_name = f"{self.config['db_name'] if self.config.get('prod') else 'scratch'}.{table_name_prefix}{self.__class__.to_snake_case(self.stream_name)}"
+        self.flatten_max_level = self.config.get("max_flatten_level", 0)
+        self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
 
         self.flatten_schema = flatten_schema(
             self.schema, max_level=self.flatten_max_level
         )
-        self.flatten_schema.get("properties", {}).update(self.extra_values_types)
+        if not self.skip_add_synced_field:
+            self.flatten_schema.get("properties", {}).update({"synced_ms": {"type": "timestamp"}})
+        self.start_time = datetime.utcnow()
 
-        self.validation()
+        self.column_renames = {key: re.sub(r'[\s\.,]+', '_', key).lower()
+                               for key in self.flatten_schema.get("properties", {}).keys()}
+        self.column_renames.update(
+            dict([kv.split("=") for kv in self.config["column_renames"].split(",")])
+            if self.config.get("column_renames")
+            else {}
+        )
+        self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
+
+        missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
+        assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
+
+        self.spark_schema = StructType([
+            StructField(self.column_renames.get(name, name), self.get_spark_type(dtype), True)
+            for name, dtype in self.flatten_schema["properties"].items()
+        ])
+        self.spark_schema_field_set = set(self.spark_schema.fieldNames())
+        self.spark = self.init_spark()
+        if IcebergSink.spark is None:
+            IcebergSink.spark = self.init_spark()
+        self.spark = IcebergSink.spark
+
+    @staticmethod
+    def to_snake_case(text: str):
+        return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
 
     @property
     def max_size(self) -> int:
@@ -51,60 +72,73 @@ class IcebergSink(BatchSink):
         """
         return self.config.get("max_batch_size", 10000)
 
-    def validation(self) -> None:
-        """Extra fields and Partition Cols validation."""
-        assert bool(self.extra_values) == bool(
-            self.extra_values_types
-        ), "extra_fields and extra_fields_types must be both set or both unset"
-        if self.extra_values:
-            assert (
-                self.extra_values.keys() == self.extra_values_types.keys()
-            ), "extra_fields and extra_fields_types must have the same keys"
-
     def process_record(self, record: dict, context: dict) -> None:
-        record_flatten = (
-            flatten_record(
-                record,
-                flattened_schema=self.flatten_schema,
-                max_level=self.flatten_max_level,
-            )
-            | self.extra_values
+        record_flatten = flatten_record(
+            record,
+            flattened_schema=self.flatten_schema,
+            max_level=self.flatten_max_level,
         )
+        # rename columns
+        for old_name, new_name in self.column_renames.items():
+            record_flatten[new_name] = record_flatten.pop(old_name)
+        # filter out fields which aren't properly defined in schema
+        record_flatten = {k: v for k, v in record_flatten.items() if k in self.spark_schema_field_set}
+        record_flatten = {
+            # Convert decimal and int values to double to avoid type mismatch exceptions
+            k: float(v) if isinstance(v, Decimal) or (
+                    isinstance(v, int) and isinstance(self.spark_schema[k].dataType, DoubleType))
+            else v
+            for k, v in record_flatten.items()
+        }
+        if not self.skip_add_synced_field:
+            record_flatten = record_flatten | { "synced_ms": self.start_time }
         super().process_record(record_flatten, context)
+
+    def get_spark_type(self, col):
+        col_type = col["type"]
+        if col.get("format") in ["date", "date-time"]:
+            return TimestampType()
+        else:
+            # type can be a value or a list e.g. ["null", "string"]
+            col_type_list = col_type if isinstance(col_type, list) else [col_type]
+            col_type_list = [col_type for col_type in col_type_list if col_type.lower() != "null"]
+            col_type = col_type_list[0].lower()
+            return {
+                "string": StringType(),
+                "integer": LongType(),
+                "number": DoubleType(),
+                "boolean": BooleanType(),
+                "timestamp": TimestampType(),
+                "object": StringType(),
+                "array": StringType(),
+            }[col_type]
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(
             f'Processing batch for {self.stream_name} with {len(context["records"])} records.'
         )
-
-        spark = self.init_spark()
-        df = self.create_dataframe(spark, context.get("records", []))
-        self.create_table(spark, df)
-        self.write_data(spark, df)
+        df = self.spark.createDataFrame(context.get("records", []), schema=self.spark_schema)
+        self.create_table(self.spark, df)
+        self.write_data(self.spark, df)
 
         del context["records"]
 
     def init_spark(self):
+        # Reuse existing SparkSession if available
+        spark = SparkSession.getActiveSession()
+        if spark is not None:
+            return spark
+
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
-            .setMaster("local[*]")
+            .setMaster("yarn")
 
-        spark = SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
+        return SparkSession.builder.config(conf=conf).enableHiveSupport().getOrCreate()
 
-        return spark
-
-    def create_dataframe(self, spark: SparkSession, records: list):
-        rows_rdd = spark.sparkContext.parallelize(records)
-        rows = rows_rdd.map(lambda x: Row(**x))
-        def clean_field_name(name):
-            return re.sub(r'[\s\.,]+', '_', name)
-        df = spark.createDataFrame(rows)
-        for col_name in df.columns:
-            df = df.withColumnRenamed(col_name, clean_field_name(col_name))
-        return df
+    def create_dataframe(self, spark: SparkSession, records: list, schema: StructType) -> DataFrame:
+        spark.createDataFrame(records, schema=schema)
 
     def create_table(self, spark: SparkSession, df: DataFrame):
-        # Check if the table exists
         if not spark.catalog.tableExists(self.table_name):
             column_definitions = ', '.join(
                 [f"{field.name} {field.dataType.simpleString()}" for field in df.schema.fields])

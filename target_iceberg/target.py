@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from singer_sdk import typing as th
 from singer_sdk.target_base import Target
+from decimal import Decimal
 
-from target_iceberg.sinks import (
-    IcebergSink,
-)
+from target_iceberg.sinks import IcebergSink
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """JSON encoder for Decimal used in state."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return super().default(obj)
 
 
 class TargetIceberg(Target):
@@ -17,10 +25,16 @@ class TargetIceberg(Target):
 
     config_jsonschema = th.PropertiesList(
         th.Property(
-            "table_name",
+            "db_name",
             th.StringType,
-            title="Table name",
-            description="Output table name e.g. some_db.some_table",
+            title="Db name",
+            description="Output Db name e.g. some_db. Table name is derived from stream name automatically.",
+        ),
+        th.Property(
+            "table_name_prefix",
+            th.StringType,
+            title="Table name prefix",
+            description="Additional table name prefix e.g. 'a4a' would result in a table name like 'my_db.a4a_raw_users'.",
         ),
         th.Property(
             "max_batch_size",
@@ -33,22 +47,29 @@ class TargetIceberg(Target):
             "max_flatten_level",
             th.IntegerType,
             description="Max level of nesting to flatten",
-            default=100,
+            default=0,
         ),
         th.Property(
-            "extra_fields",
-            th.StringType,
-            description="Extra fields to add to the flattened record. "
-            "(e.g. extra_col1=value1,extra_col2=value2)",
+            "skip_add_synced_field",
+            th.BooleanType,
+            description="Skip adding synced_ms column",
         ),
         th.Property(
-            "extra_fields_types",
+            "column_renames",
             th.StringType,
-            description="Extra fields types. (e.g. extra_col1=string,extra_col2=integer)",
+            description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
         ),
     ).to_dict()
 
     default_sink_class = IcebergSink
+
+
+    def _write_state_message(self, state: dict) -> None:
+        """Emit the stream's latest state."""
+        state_json = json.dumps(state, cls=DecimalEncoder)
+        self.logger.info("Emitting completed target state %s", state_json)
+        sys.stdout.write(f"{state_json}\n")
+        sys.stdout.flush()
 
 
 if __name__ == "__main__":
