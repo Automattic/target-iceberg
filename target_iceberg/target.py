@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from singer_sdk import typing as th
 from singer_sdk.target_base import Target
 from decimal import Decimal
