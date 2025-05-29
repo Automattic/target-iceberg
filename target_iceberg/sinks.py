@@ -127,10 +127,7 @@ class IcebergSink(BatchSink):
         # Reuse existing SparkSession if available
         spark = SparkSession.getActiveSession()
         if spark is not None:
-            raise Exception("Found active session!")
-            #return spark
-
-        SparkSession.stop()
+            return spark
 
         conf = SparkConf() \
             .setAppName("Apache Iceberg with PySpark") \
