@@ -7,6 +7,7 @@ import re
 from datetime import datetime
 from functools import cached_property
 
+import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
@@ -27,6 +28,8 @@ class IcebergSink(BatchSink):
                            f"{table_name_prefix}{IcebergSink.to_snake_case(self.stream_name)}")
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
+        self.overwrite_data = self.config.get("overwrite_data", False)
+        self.data_buffer = None
 
         self.flatten_schema = flatten_schema(self.schema, max_level=self.flatten_max_level)
         if not self.skip_add_synced_field:
@@ -83,14 +86,15 @@ class IcebergSink(BatchSink):
         super().process_record(record_flatten, context)
 
     def process_batch(self, context: dict) -> None:
-        self.logger.info(
-            f'Processing batch for {self.stream_name} with {len(context["records"])} records.'
-        )
-        pyarrow_df = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
-        self.logger.info(
-            f"Pyarrow table size: {pyarrow_df.nbytes} | ({len(pyarrow_df)} rows)"
-        )
-        self.table.append(pyarrow_df)
+        self.logger.info(f'Processing batch for {self.stream_name} with {len(context["records"])} records.')
+        new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
+        self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
+        if self.overwrite_data:
+            # If data is to be overwritten, we buffer it all in memory and write at the end
+            self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
+        else:
+            self.table.append(new_data)
+
         del context["records"]
 
     def get_table(self):
@@ -99,3 +103,9 @@ class IcebergSink(BatchSink):
             return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
         else:
             return self.catalog.load_table(self.table_name)
+
+    def clean_up(self) -> None:
+        """Perform any clean up actions required at end of a stream."""
+        if self.overwrite_data:
+            self.table.overwrite(self.data_buffer)
+        super().clean_up()

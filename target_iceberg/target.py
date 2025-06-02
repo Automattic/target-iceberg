@@ -60,6 +60,12 @@ class TargetIceberg(Target):
             th.StringType,
             description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
         ),
+        th.Property(
+            "overwrite_data",
+            th.BooleanType,
+            description="True if existing data should be overwritten. False if new data should be appended.",
+            default=False,
+        ),
     ).to_dict()
 
     default_sink_class = IcebergSink
