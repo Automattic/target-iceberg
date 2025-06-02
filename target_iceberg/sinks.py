@@ -107,5 +107,6 @@ class IcebergSink(BatchSink):
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
+            self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
         super().clean_up()
