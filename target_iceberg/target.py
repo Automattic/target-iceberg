@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from singer_sdk import typing as th
 from singer_sdk.target_base import Target
 from decimal import Decimal
@@ -58,6 +59,13 @@ class TargetIceberg(Target):
             "column_renames",
             th.StringType,
             description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
+        ),
+        th.Property(
+            "overwrite_data_for_streams",
+            th.StringType,
+            description="Comma seperated list of stream names for which existing data should be overwritten. "
+                        "Otherwise new data will be appended.",
+            default="",
         ),
     ).to_dict()
 

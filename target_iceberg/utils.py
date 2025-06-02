@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import logging
+
+import pyarrow as pa
+import re
+
+FIELD_TYPE_TO_PYARROW = {
+    "BOOLEAN": pa.bool_(),
+    "STRING": pa.string(),
+    "ARRAY": pa.string(),
+    "INTEGER": pa.int64(),
+    "NUMBER": pa.float64(),
+    "OBJECT": pa.string(),
+}
+
+logger = logging.getLogger(__name__)
+
+
+
+
+def _field_type_to_pyarrow_field(
+    field_name: str, input_types: dict, required_fields: list[str]
+) -> pa.Field:
+    types = input_types.get("type", [])
+    # If type is not defined, check if anyOf is defined
+    if not types:
+        for any_type in input_types.get("anyOf", []):
+            if t := any_type.get("type"):
+                if isinstance(t, list):
+                    types.extend(t)
+                else:
+                    types.append(t)
+    types = [types] if isinstance(types, str) else types
+    types_uppercase = [item.upper() for item in types]
+    nullable = "NULL" in types_uppercase or field_name not in required_fields
+    if "NULL" in types_uppercase:
+        types_uppercase.remove("NULL")
+    input_type = next(iter(types_uppercase)) if types_uppercase else ""
+    pyarrow_type = FIELD_TYPE_TO_PYARROW.get(input_type, pa.string())
+    # override with timestamp type if format set to date or date-time even if value type is e.g. string.
+    if input_types.get("format") in ["date", "date-time"]:
+        pyarrow_type = pa.timestamp("ms")
+    return pa.field(field_name, pyarrow_type, nullable)
+
+
+def flatten_schema_to_pyarrow_schema(flatten_schema_dictionary: dict, column_renames: dict) -> pa.Schema:
+    """Function that converts a flatten schema to a pyarrow schema in a defined order.
+
+    E.g:
+     dictionary = {
+        'properties': {
+             'key_1': {'type': ['null', 'integer']},
+             'key_2__key_3': {'type': ['null', 'string']},
+             'key_2__key_4__key_5': {'type': ['null', 'integer']},
+             'key_2__key_4__key_6': {'type': ['null', 'array']}
+           }
+        }
+    By calling the function with the dictionary above as parameter,
+    you will get the following structure:
+        pa.schema([
+             pa.field('key_1', pa.int64()),
+             pa.field('key_2__key_3', pa.string()),
+             pa.field('key_2__key_4__key_5', pa.int64()),
+             pa.field('key_2__key_4__key_6', pa.string())
+        ])
+    """
+    flatten_schema = flatten_schema_dictionary.get("properties", {})
+    required_fields = flatten_schema_dictionary.get("required", [])
+    return pa.schema(
+        [
+            _field_type_to_pyarrow_field(
+                column_renames.get(field_name, field_name), field_input_types, required_fields=required_fields
+            )
+            for field_name, field_input_types in flatten_schema.items()
+        ]
+    )
+
+
+def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
+    """Create a pyarrow Table from a python list of dict."""
+    data = {f: [row.get(f) for row in list_dict] for f in schema.names}
+    return pa.table(data).cast(schema)
