@@ -28,7 +28,7 @@ class IcebergSink(BatchSink):
                            f"{table_name_prefix}{IcebergSink.to_snake_case(self.stream_name)}")
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
-        self.overwrite_data = self.config.get("overwrite_data", False)
+        self.overwrite_data = self.config.get("overwrite_data", '').split(',')
         self.data_buffer = None
 
         self.flatten_schema = flatten_schema(self.schema, max_level=self.flatten_max_level)
