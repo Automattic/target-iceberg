@@ -61,10 +61,11 @@ class TargetIceberg(Target):
             description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
         ),
         th.Property(
-            "overwrite_data",
-            th.BooleanType,
-            description="True if existing data should be overwritten. False if new data should be appended.",
-            default=False,
+            "overwrite_data_for_streams",
+            th.StringType,
+            description="Comma seperated list of stream names for which existing data should be overwritten. "
+                        "Otherwise new data will be appended.",
+            default="",
         ),
     ).to_dict()
 
