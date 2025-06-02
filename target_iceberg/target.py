@@ -26,6 +26,12 @@ class TargetIceberg(Target):
 
     config_jsonschema = th.PropertiesList(
         th.Property(
+            "prod",
+            th.BooleanType,
+            description="True if production db should be used, otherwise scratch will be used.",
+            default=False,
+        ),
+        th.Property(
             "db_name",
             th.StringType,
             title="Db name",
