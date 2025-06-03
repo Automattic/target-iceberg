@@ -37,7 +37,7 @@ class IcebergSink(BatchSink):
 
         self.flatten_schema = flatten_schema(self.schema, max_level=self.flatten_max_level)
         if not self.skip_add_synced_field:
-            self.flatten_schema.get("properties", {}).update({"synced_ms": {"type": "timestamp"}})
+            self.flatten_schema.get("properties", {}).update({"synced_ms": {"type": "STRING", "format": "date-time"}})
         self.start_time = datetime.utcnow()
 
         self.column_renames = {key: re.sub(r'[\s\.,]+', '_', key).lower()
