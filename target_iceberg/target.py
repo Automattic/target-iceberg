@@ -73,6 +73,21 @@ class TargetIceberg(Target):
                         "Otherwise new data will be appended.",
             default="",
         ),
+        th.Property(
+            "upsert_data_for_streams",
+            th.StringType,
+            description="Comma seperated list of stream names for which upsert should be used. This requires a primary"
+                        "key to be set either automatically via key_properties stream definition or explicitly via the"
+                        "primary_key_for_streams parameter.",
+            default="",
+        ),
+        th.Property(
+            "primary_key_for_streams",
+            th.StringType,
+            description="Semicolon seperated list of stream names and their primary keys e.g. "
+                        "stream1=column1,columns2;stream2=culumn1. Used only if stream is in upsert_data_for_streams.",
+            default="",
+        ),
     ).to_dict()
 
     default_sink_class = IcebergSink
