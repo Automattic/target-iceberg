@@ -78,7 +78,7 @@ def flatten_schema_to_pyarrow_schema(flatten_schema_dictionary: dict, column_ren
     )
 
 
-def _convert_decimal(value: Decimal):
+def _convert_decimal(value):
     """Convert Decimal"""
     if isinstance(value, Decimal):
         return float(value)
