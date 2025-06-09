@@ -1,6 +1,6 @@
 [project]
 name = "target-iceberg"
-version = "0.0.2"
+version = "1.0.3"
 description = "Singer target for iceberg, built with the Meltano Singer SDK."
 readme = "README.md"
 authors = [{ name = "Jarosław Cellary", email = "jcellary@gmail.com" }]
