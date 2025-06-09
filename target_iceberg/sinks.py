@@ -84,7 +84,7 @@ class IcebergSink(BatchSink):
             )
         )
         for old_name, new_name in self.column_renames.items():
-            record_flatten[new_name] = record_flatten.pop(old_name)
+            record_flatten[new_name] = record_flatten.pop(old_name, None)
         if not self.skip_add_synced_field:
             record_flatten = record_flatten | { "synced_ms": self.start_time }
         super().process_record(record_flatten, context)
