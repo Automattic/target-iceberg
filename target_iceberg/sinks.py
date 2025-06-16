@@ -25,7 +25,7 @@ class IcebergSink(BatchSink):
         )
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
         table_renames = dict([(IcebergSink.to_snake_case(kv.split("=")[0]), IcebergSink.to_snake_case(kv.split("=")[1]))
-                              for kv in self.config["table_renames"].split(",")])
+                              for kv in self.config.get("table_renames", '').split(",")])
         if snake_case_stream_name in table_renames:
             snake_case_stream_name = table_renames[snake_case_stream_name]
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
