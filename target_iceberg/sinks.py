@@ -137,7 +137,8 @@ class IcebergSink(BatchSink):
         super().process_record(record_flatten, context)
 
     def process_batch(self, context: dict) -> None:
-        self.logger.info(f'Processing batch for {self.stream_name} with {len(context["records"])} records.')
+        self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
+                         f'with {len(context["records"])} records.')
         new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
         self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
         if self.overwrite_data:
