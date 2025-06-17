@@ -14,6 +14,8 @@ from singer_sdk.sinks import BatchSink
 
 from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema
 
+SYNCED_COLUMN_NAME = "synced_ms"
+
 class IcebergSink(BatchSink):
     spark = None
     def __init__(self, target, schema, stream_name, key_properties) -> None:
@@ -55,7 +57,7 @@ class IcebergSink(BatchSink):
     def flatten_schema(self):
         result = flatten_schema(self.schema, max_level=self.flatten_max_level)
         if not self.skip_add_synced_field:
-            result.get("properties", {}).update({"synced_ms": {"type": "STRING", "format": "date-time"}})
+            result.get("properties", {}).update({SYNCED_COLUMN_NAME: {"type": "STRING", "format": "date-time"}})
 
         return result
 
@@ -95,7 +97,7 @@ class IcebergSink(BatchSink):
         key = streams.get(self.stream_name.lower(), self.key_properties)
 
         if key == ["*"]:
-            key = self.pyarrow_schema.names
+            key = [k for k in self.pyarrow_schema.names if k != SYNCED_COLUMN_NAME]
 
         assert set(key).issubset(set(self.pyarrow_schema.names)), \
             f"Some columns of the primary key {key} do not exist in table schema: {self.pyarrow_schema.names}"
@@ -134,7 +136,7 @@ class IcebergSink(BatchSink):
         for old_name, new_name in self.column_renames.items():
             record_flatten[new_name] = record_flatten.pop(old_name)
         if not self.skip_add_synced_field:
-            record_flatten = record_flatten | { "synced_ms": self.start_time }
+            record_flatten = record_flatten | { SYNCED_COLUMN_NAME: self.start_time }
         super().process_record(record_flatten, context)
 
     def process_batch(self, context: dict) -> None:
