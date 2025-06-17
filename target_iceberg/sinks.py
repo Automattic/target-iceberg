@@ -31,7 +31,7 @@ class IcebergSink(BatchSink):
             raise ConfigValidationError(
                 f"Invalid JSON in 'table_renames' config: {self.config.get('table_renames')}"
             )
-        if snake_case_stream_name in table_renames:
+        if snake_case_stream_name in table_renames or '*' in table_renames:
             snake_case_stream_name = table_renames[snake_case_stream_name]
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
