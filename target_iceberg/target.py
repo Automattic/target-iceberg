@@ -68,8 +68,8 @@ class TargetIceberg(Target):
         ),
         th.Property(
             "table_renames",
-            th.StringType,
-            description="List of table renames e.g. 'old table name=new_table_name'. "
+            th.ObjectType,
+            description="List of table renames e.g. `{ 'old table name': 'new_table_name' }. "
                         "This is useful if you want to rename a stream if name is invalid.",
         ),
         th.Property(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from datetime import datetime
 from functools import cached_property
@@ -24,9 +23,7 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
-        table_renames = dict([(IcebergSink.to_snake_case(kv.split("=")[0]), IcebergSink.to_snake_case(kv.split("=")[1]))
-                              for kv in self.config.get("table_renames", '').split(",")]) \
-            if self.config.get("table_renames") else {}
+        table_renames = self.config.get('table_renames', {})
         if snake_case_stream_name in table_renames:
             snake_case_stream_name = table_renames[snake_case_stream_name]
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
