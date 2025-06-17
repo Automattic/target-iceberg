@@ -9,8 +9,6 @@ from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
-from pyiceberg.schema import Schema
-from pyiceberg.io.pyarrow import pyarrow_to_schema
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
@@ -32,7 +30,7 @@ class IcebergSink(BatchSink):
 
         self.validate_config()
 
-    def validate_config(self):
+    def validate_config(self) -> None:
         # Check column renames
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         assert not missing_keys, f"Some columns marked from rename do not exist in schema: {missing_keys}"
@@ -45,7 +43,7 @@ class IcebergSink(BatchSink):
         return flatten_schema_to_pyarrow_schema(self.flatten_schema, self.column_renames)
 
     @cached_property
-    def table_name(self):
+    def table_name(self) -> str:
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
@@ -62,7 +60,7 @@ class IcebergSink(BatchSink):
         return result
 
     @cached_property
-    def column_renames(self):
+    def column_renames(self) -> dict[str, str]:
         renames = {key: re.sub(r'[\s\.,]+', '_', key).lower()
                                for key in self.flatten_schema.get("properties", {}).keys()}
         renames.update(
@@ -73,12 +71,12 @@ class IcebergSink(BatchSink):
         return {key: value for key, value in renames.items() if key != value}
 
     @cached_property
-    def overwrite_data(self):
+    def overwrite_data(self) -> bool:
         return bool([s for s in self.config.get("overwrite_data_for_streams", '').split(',')
                                     if s.strip().lower() == self.stream_name.lower()])
 
     @cached_property
-    def upsert_data(self):
+    def upsert_data(self) -> bool:
         return bool([s for s in self.config.get("upsert_data_for_streams", '').split(',')
                                     if s.strip().lower() == self.stream_name.lower()])
 
@@ -88,7 +86,7 @@ class IcebergSink(BatchSink):
         return [part.strip() for part in text.split(sep) if part.strip()]
 
     @cached_property
-    def primary_key(self):
+    def primary_key(self) -> list[str]:
         primary_key_for_streams = self.config.get("primary_key_for_streams", '').lower()
         streams = [IcebergSink.clean_split(s, '=') for s in IcebergSink.clean_split(primary_key_for_streams, ';')]
         assert all(len(s) == 2 and s[0] and s[1] for s in streams), \
@@ -119,7 +117,7 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     @staticmethod
-    def to_snake_case(text: str):
+    def to_snake_case(text: str) -> str:
         return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
 
     def process_record(self, record: dict, context: dict) -> None:
@@ -146,26 +144,16 @@ class IcebergSink(BatchSink):
             self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
         else:
             if self.upsert_data:
-                self.table.upsert(new_data)
+                self.table.upsert(new_data, join_cols=self.primary_key)
             else:
                 self.table.append(new_data)
 
         del context["records"]
 
-    @staticmethod
-    def pyarrow_to_iceberg_schema(arrow_schema: pa.Schema, primary_key: List[str]) -> Schema:
-        iceberg_schema = pyarrow_to_schema(arrow_schema)
-        name_to_id = {field.name: field.field_id for field in iceberg_schema.fields}
-        identifier_field_ids = [name_to_id[name] for name in primary_key if name in name_to_id]
-
-        return Schema(*iceberg_schema.fields, identifier_field_ids=identifier_field_ids)
-
     def get_table(self):
         if not self.catalog.table_exists(self.table_name):
             self.logger.info(f'Table {self.table_name} does not exist, so creating it')
-            schema = IcebergSink.pyarrow_to_iceberg_schema(
-                self.pyarrow_schema, self.primary_key) if self.primary_key else self.pyarrow_schema
-            return self.catalog.create_table(self.table_name, schema=schema)
+            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
         else:
             return self.catalog.load_table(self.table_name)
 
