@@ -97,7 +97,7 @@ def process_config_replace(config):
     result = {}
     if config:
         for kv in config.split(','):
-            if len(kv.split('=')) == 2:
+            if len(kv.split('=')) != 2:
                 raise ConfigValidationError(f"Invalid format for {config}: {kv}. Expected format is 'key=value'.")
             key, value = kv.split('=')
             result[key] = value
