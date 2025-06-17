@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime
 from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
-from singer_sdk.exceptions import ConfigValidationError
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
@@ -25,14 +23,10 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
-        try:
-            table_renames = json.loads(self.config.get('table_renames') or '{}')
-        except json.decoder.JSONDecodeError:
-            raise ConfigValidationError(
-                f"Invalid JSON in 'table_renames' config: {self.config.get('table_renames')}"
-            )
-        # If all streams should be renamed, use the '*' key
-        if snake_case_stream_name in table_renames or '*' in table_renames:
+        table_renames = dict([(IcebergSink.to_snake_case(kv.split("=")[0]), IcebergSink.to_snake_case(kv.split("=")[1]))
+                              for kv in self.config.get("table_renames", '').split(",")]) \
+            if self.config.get("table_renames") else {}
+        if snake_case_stream_name in table_renames:
             snake_case_stream_name = table_renames[snake_case_stream_name]
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
