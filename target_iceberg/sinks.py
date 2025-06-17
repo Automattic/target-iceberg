@@ -94,7 +94,7 @@ class IcebergSink(BatchSink):
         streams = {stream[0]: IcebergSink.clean_split(stream[1], ',') for stream in streams}
         key = streams.get(self.stream_name.lower(), self.key_properties)
 
-        if key == "*":
+        if key == ["*"]:
             key = self.pyarrow_schema.names
 
         assert set(key).issubset(set(self.pyarrow_schema.names)), \
