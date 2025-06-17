@@ -6,6 +6,8 @@ from decimal import Decimal
 import pyarrow as pa
 import re
 
+from singer_sdk.exceptions import ConfigValidationError
+
 FIELD_TYPE_TO_PYARROW = {
     "BOOLEAN": pa.bool_(),
     "STRING": pa.string(),
@@ -89,3 +91,14 @@ def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
     """Create a pyarrow Table from a python list of dict."""
     data = {f: [_convert_decimal(row.get(f)) for row in list_dict] for f in schema.names}
     return pa.table(data).cast(schema)
+
+
+def process_config_replace(config):
+    result = {}
+    if config:
+        for kv in config.split(','):
+            if '=' not in kv:
+                raise ConfigValidationError(f"Invalid format for {config}: {kv}. Expected format is 'key=value'.")
+            key, value = kv.split('=')
+            result[key] = value
+    return result

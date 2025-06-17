@@ -8,10 +8,12 @@ from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from singer_sdk.exceptions import ConfigValidationError
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
-from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema
+from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_config_replace
+
 
 class IcebergSink(BatchSink):
     spark = None
@@ -23,11 +25,9 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
-        table_renames = dict([(IcebergSink.to_snake_case(kv.split("=")[0]), IcebergSink.to_snake_case(kv.split("=")[1]))
-                              for kv in self.config.get("table_renames", '').split(",")]) \
-            if self.config.get("table_renames") else {}
-        if snake_case_stream_name in table_renames or '*' in table_renames:
-            snake_case_stream_name = table_renames[snake_case_stream_name]
+        table_renames = process_config_replace(self.config.get("table_renames"))
+        if self.stream_name in table_renames or '*' in table_renames:
+            snake_case_stream_name = table_renames[self.stream_name]
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
             self.table_name = f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}"
@@ -46,11 +46,7 @@ class IcebergSink(BatchSink):
 
         self.column_renames = {key: re.sub(r'[\s\.,]+', '_', key).lower()
                                for key in self.flatten_schema.get("properties", {}).keys()}
-        self.column_renames.update(
-            dict([kv.split("=") for kv in self.config["column_renames"].split(",")])
-            if self.config.get("column_renames")
-            else {}
-        )
+        self.column_renames.update(process_config_replace(self.config.get("column_renames")))
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
 
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
