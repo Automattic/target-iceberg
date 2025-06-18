@@ -8,7 +8,6 @@ from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
-from singer_sdk.exceptions import ConfigValidationError
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
@@ -27,7 +26,7 @@ class IcebergSink(BatchSink):
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
         table_renames = process_config_replace(self.config.get("table_renames"))
         if self.stream_name in table_renames or '*' in table_renames:
-            snake_case_stream_name = table_renames[self.stream_name]
+            snake_case_stream_name = table_renames.get(self.stream_name, table_renames.get('*', snake_case_stream_name))
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
             self.table_name = f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}"
