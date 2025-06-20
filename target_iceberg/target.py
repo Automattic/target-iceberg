@@ -85,6 +85,11 @@ class TargetIceberg(Target):
     default_sink_class = IcebergSink
 
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.logger.info("Initialized target with config: %s", self.config)
+
+
     def _write_state_message(self, state: dict) -> None:
         """Emit the stream's latest state."""
         state_json = json.dumps(state, cls=DecimalEncoder)
