@@ -64,19 +64,19 @@ class TargetIceberg(Target):
         th.Property(
             "column_renames",
             th.StringType,
-            description="Map of column renames e.g. `{ 'old table name': 'new_table_name' }`",
+            description="Map of column renames e.g. { 'old table name': 'new_table_name' }",
         ),
         th.Property(
             "table_renames",
             th.StringType,
-            description="Map of table renames e.g. `{ 'old table name': 'new_table_name' }`. "
+            description="Map of table renames e.g. { 'old table name': 'new_table_name' }. "
                         "This is useful if you want to rename a stream if name is invalid.",
         ),
         th.Property(
             "overwrite_data_for_streams",
             th.StringType,
             description="List ist of stream names for which existing data should be overwritten. "
-                        "e.g. `[ 'stream 1', 'stream 2' ]`."
+                        "e.g. [ 'stream 1', 'stream 2' ]."
                         "Otherwise new data will be appended.",
             default="",
         ),
