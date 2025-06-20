@@ -11,7 +11,7 @@ from pyiceberg.catalog import load_catalog
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 
-from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_config_replace
+from target_iceberg.utils import create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config
 
 
 class IcebergSink(BatchSink):
@@ -24,9 +24,12 @@ class IcebergSink(BatchSink):
             key_properties=key_properties,
         )
         snake_case_stream_name = IcebergSink.to_snake_case(self.stream_name)
-        table_renames = process_config_replace(self.config.get("table_renames"))
+        table_renames = process_json_config(self.config.get("table_renames", '{}'),
+                                            config_name="table_renames",
+                                            expected_type=dict)
         if self.stream_name in table_renames or '*' in table_renames:
             snake_case_stream_name = table_renames.get(self.stream_name, table_renames.get('*', snake_case_stream_name))
+
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
         if self.config.get('prod'):
             self.table_name = f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}"
@@ -34,7 +37,9 @@ class IcebergSink(BatchSink):
             self.table_name = f"scratch.{self.config['db_name']}__{table_name_prefix}{snake_case_stream_name}"
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
-        self.overwrite_data = bool([s for s in self.config.get("overwrite_data_for_streams", '').split(',')
+        self.overwrite_data = bool([s for s in process_json_config(self.config.get("overwrite_data_for_streams", ''),
+                                                                   config_name="overwrite_data_for_streams",
+                                                                   expected_type=list)
                                     if s.strip().lower() == self.stream_name.lower()])
         self.data_buffer = None
 
@@ -45,7 +50,9 @@ class IcebergSink(BatchSink):
 
         self.column_renames = {key: re.sub(r'[\s\.,]+', '_', key).lower()
                                for key in self.flatten_schema.get("properties", {}).keys()}
-        self.column_renames.update(process_config_replace(self.config.get("column_renames")))
+        self.column_renames.update(process_json_config(self.config.get("column_renames", "{}"),
+                                                       config_name="column_renames",
+                                                       expected_type=dict))
         self.column_renames = {key: value for key, value in self.column_renames.items() if key != value}
 
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
