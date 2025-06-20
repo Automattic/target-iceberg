@@ -7,6 +7,8 @@ from target_iceberg.sinks import IcebergSink
 from target_iceberg.utils import _field_type_to_pyarrow_field
 
 TEST_CONFIG = {"db_name": "test_db", "column_renames": '{ "old1": "new1", "old2": "new2" }'}
+TEST_CONFIG_2 = {"db_name": "test_db", "table_renames": '{ "test": "test_renamed" }', "table_name_prefix": "raw"}
+TEST_CONFIG_3 = {"db_name": "test_db", "overwrite_data_for_streams": '["test"]', "prod": True}
 TEST_SCHEMA = {"properties": {
         "old1": {"type": "string"},
         "old2": {"type": "string"},
@@ -18,10 +20,16 @@ TEST_SCHEMA = {"properties": {
 def test_initialization():
     target = mock.Mock()
     target.config = TEST_CONFIG
-
     sink = IcebergSink(target, TEST_SCHEMA, "test", {})
-
     assert sink.column_renames == {'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
+
+    target.config = TEST_CONFIG_2
+    sink = IcebergSink(target, TEST_SCHEMA, "test", {})
+    assert sink.table_name == "scratch.test_db__raw_test_renamed"
+
+    target.config = TEST_CONFIG_3
+    sink = IcebergSink(target, TEST_SCHEMA, "test", {})
+    assert sink.overwrite_data == True
 
 
 def test_to_snake_case():
