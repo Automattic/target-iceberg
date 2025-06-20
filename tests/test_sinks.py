@@ -3,11 +3,10 @@ from __future__ import annotations
 import pytest
 import pyarrow as pa
 from unittest import mock
-from pyspark.sql.types import StringType, TimestampType
 from target_iceberg.sinks import IcebergSink
 from target_iceberg.utils import _field_type_to_pyarrow_field
 
-TEST_CONFIG = {"db_name": "test_db", "column_renames": "old1=new1,old2=new2"}
+TEST_CONFIG = {"db_name": "test_db", "column_renames": '{ "old1": "new1", "old2": "new2" }'}
 TEST_SCHEMA = {"properties": {
         "old1": {"type": "string"},
         "old2": {"type": "string"},
@@ -34,7 +33,7 @@ def test_to_snake_case():
         ("str_column", {"type": "string"}, ["str_column"], pa.string(), False),
         ("int_column", {"type": ["null", "integer"]}, [], pa.int64(), True),
         ("int_nullable", {"anyOf": [{"type": "integer"}, {"type": "NULL"}]}, ["int_nullable"], pa.int64(), True),
-        ("time_nullable", {"type": "string", "format": "date-time"}, ["time_nullable"], pa.timestamp("ms"), False),
+        ("time_nullable", {"type": "string", "format": "date-time"}, ["time_nullable"], pa.timestamp("us"), False),
         ("str_column", {}, ["str_column"], pa.string(), False),
     ]
 )
