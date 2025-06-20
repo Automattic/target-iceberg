@@ -30,6 +30,7 @@ def test_initialization():
     target.config = TEST_CONFIG_3
     sink = IcebergSink(target, TEST_SCHEMA, "test", {})
     assert sink.overwrite_data == True
+    assert sink.table_name == "test_db.test"
 
 
 def test_to_snake_case():
