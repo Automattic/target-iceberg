@@ -22,19 +22,30 @@ plugins:
     - about
     - stream-maps
     - schema-flattening
-
-    # TODO: Declare settings and their types here:
     settings:
-    - name: username
-      label: Username
-      description: The username to use for authentication
-
-    - name: password
-      kind: password
-      label: Password
-      description: The password to use for authentication
-      sensitive: true
-
-    # TODO: Declare required settings here:
-    settings_group_validation:
-    - [username, password]
+      - name: "prod"
+        kind: "boolean"
+        label: "Prod"
+        description: "True if production db should be used, otherwise scratch will be used."
+      - name: "db_name"
+        label: "Db name"
+        description: "Output Db name e.g. some_db. Table name is derived from stream name automatically."
+      - name: "table_name_prefix"
+        label: "Table name prefix"
+        description: "Additional table name prefix e.g. 'a4a' would result in a table name like 'my_db.a4a_raw_users'."
+      - name: "max_batch_size"
+        kind: "integer"
+        label: "Max Batch Size"
+        description: "Max records to write in one batch. It can control the memory usage of the target."
+      - name: "skip_add_synced_field"
+        label: "Skip Add Synced Field"
+        description: "Skip adding synced_ms column"
+      - name: "column_renames"
+        label: "Column Renames"
+        description: "Map of column renames e.g. `{ 'old table name': 'new_table_name' }`"
+      - name: "table_renames"
+        label: "Table Renames"
+        description: "Map of table renames e.g. `{ 'old table name': 'new_table_name' }`."
+      - name: "overwrite_data_for_streams"
+        label: "Overwrite Data For Streams"
+        description: "List ist of stream names for which existing data should be overwritten. e.g. `[ 'stream 1', 'stream 2' ]`."

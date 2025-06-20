@@ -64,7 +64,7 @@ class TargetIceberg(Target):
         th.Property(
             "column_renames",
             th.StringType,
-            description="Map of column renames e.g. `{ 'old table name': 'new_table_name' }",
+            description="Map of column renames e.g. `{ 'old table name': 'new_table_name' }`",
         ),
         th.Property(
             "table_renames",

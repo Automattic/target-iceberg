@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing as t
-
 import pytest
 import pyarrow as pa
 from unittest import mock
