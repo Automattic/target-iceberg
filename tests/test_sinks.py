@@ -22,6 +22,7 @@ def test_initialization():
     target.config = TEST_CONFIG
     sink = IcebergSink(target, TEST_SCHEMA, "test", {})
     assert sink.column_renames == {'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
+    assert sink.table_name == "scratch.test_db__test"
 
     target.config = TEST_CONFIG_2
     sink = IcebergSink(target, TEST_SCHEMA, "test", {})
