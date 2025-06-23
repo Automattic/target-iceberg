@@ -64,18 +64,19 @@ class TargetIceberg(Target):
         th.Property(
             "column_renames",
             th.StringType,
-            description="List of column renames e.g. 'oldname1=newname1,oldname2=newname2'",
+            description="Map of column renames e.g. { 'old table name': 'new_table_name' }",
         ),
         th.Property(
             "table_renames",
             th.StringType,
-            description="List of table renames e.g. `{ 'old table name': 'new_table_name' }. "
+            description="Map of table renames e.g. { 'old table name': 'new_table_name' }. "
                         "This is useful if you want to rename a stream if name is invalid.",
         ),
         th.Property(
             "overwrite_data_for_streams",
             th.StringType,
-            description="Comma seperated list of stream names for which existing data should be overwritten. "
+            description="List ist of stream names for which existing data should be overwritten. "
+                        "e.g. [ 'stream 1', 'stream 2' ]."
                         "Otherwise new data will be appended.",
             default="",
         ),
@@ -98,6 +99,11 @@ class TargetIceberg(Target):
     ).to_dict()
 
     default_sink_class = IcebergSink
+
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.logger.info("Initialized target with config: %s", self.config)
 
 
     def _write_state_message(self, state: dict) -> None:

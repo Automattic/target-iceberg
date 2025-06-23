@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import typing as t
-
 import pytest
 import pyarrow as pa
 from unittest import mock
-from pyspark.sql.types import StringType, TimestampType
 from singer_sdk.exceptions import ConfigValidationError
 from target_iceberg.sinks import IcebergSink
 from target_iceberg.utils import _field_type_to_pyarrow_field
+
+TEST_CONFIG = {"db_name": "test_db", "column_renames": '{ "old1": "new1", "old2": "new2" }',
+               "upsert_data_for_streams": '["test"]', "primary_key_for_streams": '{ "test": ["new1"] }'}
+TEST_CONFIG_2 = {"db_name": "test_db", "table_renames": '{ "test": "test_renamed" }', "table_name_prefix": "raw"}
+TEST_CONFIG_3 = {"db_name": "test_db", "overwrite_data_for_streams": '["test"]', "prod": True}
 
 TEST_SCHEMA = {"properties": {
         "old1": {"type": "string"},
@@ -18,36 +20,35 @@ TEST_SCHEMA = {"properties": {
         "col2": {"type": ["null", "string"], "format": "date-time"}
     }}
 
-def get_test_config(overwrte: dict = None):
-    config = {"db_name": "test_db",
-           "table_name_prefix": "test_table",
-           "column_renames": "old1=new1,old2=new2",
-           "primary_key_for_streams": "test=col1,col2;test2=col1",
-           "upsert_data_for_streams": "test"}
-    if overwrte:
-        config.update(overwrte)
-    return config
-
-def get_test_sink(config: dict):
+def get_test_sink(config_base: dict, config_overwrites: dict = None):
     target = mock.Mock()
+    config = config_base.copy()
+    if config_overwrites:
+        config.update(config_overwrites)
     target.config = config
     return IcebergSink(target, TEST_SCHEMA, "test", {})
 
 def test_initialization():
-    sink = get_test_sink(get_test_config())
-
+    sink = get_test_sink(TEST_CONFIG)
     assert sink.column_renames == {'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
+    assert sink.table_name == "scratch.test_db__test"
     assert sink.upsert_data == True
-    assert sink.overwrite_data == False
-    assert sink.primary_key == ['col1', 'col2']
+    assert sink.primary_key == ["new1"]
+
+    sink = get_test_sink(TEST_CONFIG_2)
+    assert sink.table_name == "scratch.test_db__raw_test_renamed"
+
+    sink = get_test_sink(TEST_CONFIG_3)
+    assert sink.overwrite_data == True
+    assert sink.table_name == "test_db.test"
 
 def test_initialization_renames_validation():
     with pytest.raises(ConfigValidationError, match="Some columns marked from rename do not exist in schema: {'invalid'}"):
-        get_test_sink(get_test_config({"column_renames": "old1=new1,old2=new2,invalid=new"}))
+        get_test_sink(TEST_CONFIG, {"column_renames": '{ "old1": "new1", "old2": "new2", "invalid": "new" }'})
 
 def test_initialization_upsert_validation():
     with pytest.raises(ConfigValidationError, match="Upsert is set, but no primary key defined."):
-        get_test_sink(get_test_config({"primary_key_for_streams": "invalid=invalid"}))
+        get_test_sink(TEST_CONFIG, {"primary_key_for_streams": '{"invalid": ["invalid"]}'})
 
 @pytest.mark.parametrize(
     "field_name,input_types,required_fields,expected_type,expected_nullable",
