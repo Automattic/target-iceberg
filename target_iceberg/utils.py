@@ -4,7 +4,7 @@ import logging
 from decimal import Decimal
 
 import pyarrow as pa
-import re
+import json
 
 from singer_sdk.exceptions import ConfigValidationError
 
@@ -93,12 +93,14 @@ def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
     return pa.table(data).cast(schema)
 
 
-def process_config_replace(config):
-    result = {}
-    if config:
-        for kv in config.split(','):
-            if len(kv.split('=')) != 2:
-                raise ConfigValidationError(f"Invalid format for {config}: {kv}. Expected format is 'key=value'.")
-            key, value = kv.split('=')
-            result[key] = value
-    return result
+def process_json_config(config, config_name, expected_type):
+    try:
+        value = json.loads(config)
+    except json.JSONDecodeError as e:
+        raise ConfigValidationError(f"Invalid JSON format for config {config_name}: {config}. \nError: {e}")
+
+    if not isinstance(value, expected_type):
+        raise ConfigValidationError(
+            f"Invalid type for config {config_name}: {type(value)} -> {config}. \nExpected type: {expected_type}."
+        )
+    return value
