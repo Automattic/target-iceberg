@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 
 import pyarrow as pa
 import re
+
+from singer_sdk.exceptions import ConfigValidationError
 
 FIELD_TYPE_TO_PYARROW = {
     "BOOLEAN": pa.bool_(),
@@ -77,7 +80,34 @@ def flatten_schema_to_pyarrow_schema(flatten_schema_dictionary: dict, column_ren
     )
 
 
+def _convert_decimal(value):
+    """Convert Decimal"""
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
 def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
     """Create a pyarrow Table from a python list of dict."""
-    data = {f: [row.get(f) for row in list_dict] for f in schema.names}
+    data = {f: [_convert_decimal(row.get(f)) for row in list_dict] for f in schema.names}
     return pa.table(data).cast(schema)
+
+
+def process_config_replace(config):
+    result = {}
+    if config:
+        for kv in config.split(','):
+            if len(kv.split('=')) != 2:
+                raise ConfigValidationError(f"Invalid format for {config}: {kv}. Expected format is 'key=value'.")
+            key, value = kv.split('=')
+            result[key] = value
+    return result
+
+
+def to_snake_case(text: str) -> str:
+    return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
+
+
+def clean_split(text: str, sep: str) -> list[str]:
+    # split and strip and eliminate empty elements
+    return [part.strip() for part in text.split(sep) if part.strip()]
