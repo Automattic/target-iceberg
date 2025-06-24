@@ -103,11 +103,8 @@ def clean_split(text: str, sep: str) -> list[str]:
 def process_json_config(config, config_name, expected_type):
     try:
         value = json.loads(config)
-    except json.JSONDecodeError as ej:
-        try:
-            value = ast.literal_eval(config)
-        except (SyntaxError, ValueError):
-            raise ConfigValidationError(f"Could not parse as JSON nor Python for config {config_name}: {config}. \nJSON Parsing Error: {ej}")
+    except json.JSONDecodeError as e:
+        raise ConfigValidationError(f"Invalid JSON format for config {config_name}: {config}. \nError: {e}")
 
     if not isinstance(value, expected_type):
         raise ConfigValidationError(
