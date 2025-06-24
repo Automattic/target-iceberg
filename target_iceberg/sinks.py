@@ -37,10 +37,12 @@ class IcebergSink(BatchSink):
         # Check column renames
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         if missing_keys:
+            assert False, f"Some columns marked from rename do not exist in schema: {missing_keys}"
             raise ConfigValidationError(f"Some columns marked from rename do not exist in schema: {missing_keys}")
 
         # Check primary key if upsert is set
         if self.upsert_data and not self.primary_key:
+            assert False, "Upsert is set, but no primary key defined."
             raise ConfigValidationError("Upsert is set, but no primary key defined.")
 
     @cached_property
@@ -103,6 +105,7 @@ class IcebergSink(BatchSink):
             key = [k for k in self.pyarrow_schema.names if k != SYNCED_COLUMN_NAME]
 
         if not set(key).issubset(set(self.pyarrow_schema.names)):
+            assert False, f"Some columns of the primary key {key} do not exist in table schema: {self.pyarrow_schema.names}"
             raise ConfigValidationError(
                 f"Some columns of the primary key {key} do not exist in table schema: {self.pyarrow_schema.names}")
 
@@ -168,5 +171,4 @@ class IcebergSink(BatchSink):
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
 
-        assert False, "Fail just for test"
         super().clean_up()
