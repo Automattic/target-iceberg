@@ -26,23 +26,25 @@ class IcebergSink(BatchSink):
             stream_name=stream_name,
             key_properties=key_properties,
         )
-        self.flatten_max_level = self.config.get("max_flatten_level", 0)
-        self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
-        self.data_buffer = None
-        self.start_time = datetime.utcnow()
+        try:
+            self.flatten_max_level = self.config.get("max_flatten_level", 0)
+            self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
+            self.data_buffer = None
+            self.start_time = datetime.utcnow()
 
-        self.validate_config()
+            self.validate_config()
+            assert False, f"Failed at the end"
+        except Exception as e:
+            assert False, f"Failed with exception: {e}"
 
     def validate_config(self) -> None:
         # Check column renames
         missing_keys = set(self.column_renames.keys()) - set(self.flatten_schema.get("properties", {}).keys())
         if missing_keys:
-            assert False, f"Some columns marked from rename do not exist in schema: {missing_keys}"
             raise ConfigValidationError(f"Some columns marked from rename do not exist in schema: {missing_keys}")
 
         # Check primary key if upsert is set
         if self.upsert_data and not self.primary_key:
-            assert False, "Upsert is set, but no primary key defined."
             raise ConfigValidationError("Upsert is set, but no primary key defined.")
 
     @cached_property
@@ -105,7 +107,6 @@ class IcebergSink(BatchSink):
             key = [k for k in self.pyarrow_schema.names if k != SYNCED_COLUMN_NAME]
 
         if not set(key).issubset(set(self.pyarrow_schema.names)):
-            assert False, f"Some columns of the primary key {key} do not exist in table schema: {self.pyarrow_schema.names}"
             raise ConfigValidationError(
                 f"Some columns of the primary key {key} do not exist in table schema: {self.pyarrow_schema.names}")
 
@@ -170,5 +171,4 @@ class IcebergSink(BatchSink):
         if self.overwrite_data:
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
-
         super().clean_up()

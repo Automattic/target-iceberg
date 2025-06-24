@@ -103,11 +103,9 @@ def process_json_config(config, config_name, expected_type):
     try:
         value = json.loads(config)
     except json.JSONDecodeError as e:
-        assert False, f"Invalid JSON format for config {config_name}: {config}. \nError: {e}"
         raise ConfigValidationError(f"Invalid JSON format for config {config_name}: {config}. \nError: {e}")
 
     if not isinstance(value, expected_type):
-        assert False, f"Invalid type for config {config_name}: {type(value)} -> {config}. \nExpected type: {expected_type}."
         raise ConfigValidationError(
             f"Invalid type for config {config_name}: {type(value)} -> {config}. \nExpected type: {expected_type}."
         )
