@@ -31,6 +31,8 @@ class IcebergSink(BatchSink):
         self.data_buffer = None
         self.start_time = datetime.utcnow()
 
+        assert False, "Fail just for test"
+
         self.validate_config()
 
     def validate_config(self) -> None:
