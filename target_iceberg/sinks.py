@@ -151,21 +151,21 @@ class IcebergSink(BatchSink):
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
                          f'with {len(context["records"])} records.')
-        new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
-        self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
-        if self.overwrite_data:
-            # If data is to be overwritten, we buffer it all in memory and write at the end
-            self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
-        else:
-            try:
-                if self.upsert_data:
-                    self.table.upsert(new_data, join_cols=self.primary_key)
-                else:
-                    self.table.append(new_data)
-            except Exception as e:
-                self.logger.error(f"Failed to write data: {e}")
-                raise e
-        del context["records"]
+        try:
+            new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
+            self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
+            if self.overwrite_data:
+                # If data is to be overwritten, we buffer it all in memory and write at the end
+                self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
+            else:
+                    if self.upsert_data:
+                        self.table.upsert(new_data, join_cols=self.primary_key)
+                    else:
+                        self.table.append(new_data)
+            del context["records"]
+        except Exception as e:
+            self.logger.error(f"Failed to process batch: {e}")
+            raise e
         self.logger.info(f"Finished processing batch for {self.stream_name} - table {self.table_name} '")
 
     def get_table(self):
