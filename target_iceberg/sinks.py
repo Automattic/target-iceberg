@@ -33,9 +33,10 @@ class IcebergSink(BatchSink):
             self.start_time = datetime.utcnow()
 
             self.validate_config()
-            assert False, f"Failed at the end"
         except Exception as e:
-            assert False, f"Failed with exception: {e}"
+            # add explicit logging, as for some reason meltano doesn't show the message in logs.
+            self.logger.error(e)
+            raise e
 
     def validate_config(self) -> None:
         # Check column renames
