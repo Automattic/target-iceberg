@@ -131,18 +131,22 @@ class IcebergSink(BatchSink):
         return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
-        record_flatten = (
-            flatten_record(
-                record,
-                flattened_schema=self.flatten_schema,
-                max_level=self.flatten_max_level,
+        try:
+            record_flatten = (
+                flatten_record(
+                    record,
+                    flattened_schema=self.flatten_schema,
+                    max_level=self.flatten_max_level,
+                )
             )
-        )
-        for old_name, new_name in self.column_renames.items():
-            record_flatten[new_name] = record_flatten.pop(old_name, None)
-        if not self.skip_add_synced_field:
-            record_flatten = record_flatten | { SYNCED_COLUMN_NAME: self.start_time }
-        super().process_record(record_flatten, context)
+            for old_name, new_name in self.column_renames.items():
+                record_flatten[new_name] = record_flatten.pop(old_name, None)
+            if not self.skip_add_synced_field:
+                record_flatten = record_flatten | { SYNCED_COLUMN_NAME: self.start_time }
+            super().process_record(record_flatten, context)
+        except Exception as e:
+            self.logger.error(f"Failed to process record: {e}")
+            raise e
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
@@ -161,8 +165,8 @@ class IcebergSink(BatchSink):
             except Exception as e:
                 self.logger.error(f"Failed to write data: {e}")
                 raise e
-
         del context["records"]
+        self.logger.info(f"Finished processing batch for {self.stream_name} - table {self.table_name} '")
 
     def get_table(self):
         if not self.catalog.table_exists(self.table_name):
@@ -172,6 +176,7 @@ class IcebergSink(BatchSink):
             return self.catalog.load_table(self.table_name)
 
     def clean_up(self) -> None:
+        self.logger.info(f"Starting cleanup for {self.stream_name}")
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
             self.logger.info(f'Overwriting data in the table {self.table_name}')
