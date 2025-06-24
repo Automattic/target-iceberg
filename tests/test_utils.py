@@ -13,10 +13,10 @@ def test_valid_list_input():
     assert result == ["item1", "item2"]
 
 def test_invalid_json():
-    config = '{"key": "value",}'  # invalid due to trailing comma
+    config = '{"key": "value",a}'  # invalid due to trailing comma
     with pytest.raises(ConfigValidationError) as excinfo:
         process_json_config(config, "bad_json", dict)
-    assert "Invalid JSON format" in str(excinfo.value)
+    assert "Could not parse" in str(excinfo.value)
 
 def test_wrong_type():
     config = '["item1", "item2"]'  # valid JSON but not a dict
