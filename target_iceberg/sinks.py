@@ -166,7 +166,6 @@ class IcebergSink(BatchSink):
         except Exception as e:
             self.logger.error(f"Failed to process batch: {e}")
             raise e
-        self.logger.info(f"Finished processing batch for {self.stream_name} - table {self.table_name} '")
 
     def get_table(self):
         if not self.catalog.table_exists(self.table_name):
@@ -176,7 +175,6 @@ class IcebergSink(BatchSink):
             return self.catalog.load_table(self.table_name)
 
     def clean_up(self) -> None:
-        self.logger.info(f"Starting cleanup for {self.stream_name}")
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
             self.logger.info(f'Overwriting data in the table {self.table_name}')
