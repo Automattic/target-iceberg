@@ -85,21 +85,21 @@ class IcebergSink(BatchSink):
 
     @cached_property
     def overwrite_data(self) -> bool:
-        return bool([s for s in process_json_config(self.config.get("overwrite_data_for_streams", '[]'),
+        return bool([s for s in process_json_config(self.config.get("overwrite_data_for_streams") or '[]',
                                                     config_name="overwrite_data_for_streams",
                                                     expected_type=list)
                      if s.strip().lower() == self.stream_name.lower()])
 
     @cached_property
     def upsert_data(self) -> bool:
-        return bool([s for s in process_json_config(self.config.get("upsert_data_for_streams", '[]'),
+        return bool([s for s in process_json_config(self.config.get("upsert_data_for_streams") or '[]',
                                                     config_name="upsert_data_for_streams",
                                                     expected_type=list)
                      if s.strip().lower() == self.stream_name.lower()])
 
     @cached_property
     def primary_key(self) -> list[str]:
-        keys = process_json_config(self.config.get("primary_key_for_streams", '{}'),
+        keys = process_json_config(self.config.get("primary_key_for_streams") or '{}',
                                                     config_name="primary_key_for_streams",
                                                     expected_type=dict)
         key = keys.get(self.stream_name, self.key_properties)
