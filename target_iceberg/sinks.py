@@ -31,8 +31,6 @@ class IcebergSink(BatchSink):
         self.data_buffer = None
         self.start_time = datetime.utcnow()
 
-        assert False, "Fail just for test"
-
         self.validate_config()
 
     def validate_config(self) -> None:
@@ -169,4 +167,6 @@ class IcebergSink(BatchSink):
         if self.overwrite_data:
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
+
+        assert False, "Fail just for test"
         super().clean_up()
