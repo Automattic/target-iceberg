@@ -153,10 +153,14 @@ class IcebergSink(BatchSink):
             # If data is to be overwritten, we buffer it all in memory and write at the end
             self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
         else:
-            if self.upsert_data:
-                self.table.upsert(new_data, join_cols=self.primary_key)
-            else:
-                self.table.append(new_data)
+            try:
+                if self.upsert_data:
+                    self.table.upsert(new_data, join_cols=self.primary_key)
+                else:
+                    self.table.append(new_data)
+            except Exception as e:
+                self.logger.error(f"Failed to write data: {e}")
+                raise e
 
         del context["records"]
 
