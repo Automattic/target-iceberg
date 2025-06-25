@@ -35,6 +35,8 @@ class IcebergSink(BatchSink):
             self.table_name = f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}"
         else:
             self.table_name = f"scratch.{self.config['db_name']}__{table_name_prefix}{snake_case_stream_name}"
+
+        self.logger.info(f"Stream name is {stream_name} and output table name is {self.table_name}")
         self.flatten_max_level = self.config.get("max_flatten_level", 0)
         self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
         self.overwrite_data = bool([s for s in process_json_config(self.config.get("overwrite_data_for_streams", '[]'),
