@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
+import ast
+import re
 import pyarrow as pa
 import json
 
@@ -18,8 +20,6 @@ FIELD_TYPE_TO_PYARROW = {
 }
 
 logger = logging.getLogger(__name__)
-
-
 
 
 def _field_type_to_pyarrow_field(
@@ -92,6 +92,13 @@ def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
     data = {f: [_convert_decimal(row.get(f)) for row in list_dict] for f in schema.names}
     return pa.table(data).cast(schema)
 
+def to_snake_case(text: str) -> str:
+    return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
+
+
+def clean_split(text: str, sep: str) -> list[str]:
+    # split and strip and eliminate empty elements
+    return [part.strip() for part in text.split(sep) if part.strip()]
 
 def process_json_config(config, config_name, expected_type):
     try:
