@@ -83,7 +83,7 @@ class TargetIceberg(Target):
         th.Property(
             "upsert_data_for_streams",
             th.StringType,
-            description="Comma seperated list of stream names for which upsert should be used. This requires a primary"
+            description="Json list of stream names for which upsert should be used. This requires a primary"
                         "key to be set either automatically via key_properties stream definition or explicitly via the"
                         "primary_key_for_streams parameter.",
             default="",
