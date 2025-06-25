@@ -20,8 +20,6 @@ FIELD_TYPE_TO_PYARROW = {
 logger = logging.getLogger(__name__)
 
 
-
-
 def _field_type_to_pyarrow_field(
     field_name: str, input_types: dict, required_fields: list[str]
 ) -> pa.Field:
@@ -43,7 +41,10 @@ def _field_type_to_pyarrow_field(
     pyarrow_type = FIELD_TYPE_TO_PYARROW.get(input_type, pa.string())
     # override with timestamp type if format set to date or date-time even if value type is e.g. string.
     if input_types.get("format") in ["date", "date-time"]:
-        pyarrow_type = pa.timestamp("us")
+        pyarrow_type = pa.timestamp("us", tz='UTC')
+    # ensure all timestamps are UTC and not converted e.g. to timestamp_ntz
+    if pa.types.is_timestamp(pyarrow_type):
+        pyarrow_type = pa.timestamp("us", tz='UTC')
     return pa.field(field_name, pyarrow_type, nullable)
 
 
