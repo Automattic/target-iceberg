@@ -91,7 +91,7 @@ class TargetIceberg(Target):
         th.Property(
             "primary_key_for_streams",
             th.StringType,
-            description="Semicolon seperated list of stream names and their primary keys e.g. "
+            description="Map with stream names and their list of primary keys e.g. "
                         "'{ "stream1": ["column1","columns2"], "stream2": "culumn1" }'. Used only if stream is in upsert_data_for_streams."
                         "* can be used instead of list of columns to deduplicate by all columns.",
             default="",
