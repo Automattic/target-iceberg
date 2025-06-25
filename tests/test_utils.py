@@ -1,6 +1,6 @@
 import pytest
 from singer_sdk.exceptions import ConfigValidationError
-from target_iceberg.utils import process_json_config
+from target_iceberg.utils import process_json_config, clean_split, to_snake_case
 
 def test_valid_dict_input():
     config = '{"key": "value"}'
@@ -23,3 +23,9 @@ def test_wrong_type():
     with pytest.raises(ConfigValidationError) as excinfo:
         process_json_config(config, "wrong_type", dict)
     assert "Invalid type for config" in str(excinfo.value)
+
+def test_to_snake_case_basic():
+    assert to_snake_case("someVariableName") == "some_variable_name"
+
+def test_clean_and_split():
+    assert clean_split(" a , , b ,c , , ", ",") == ["a", "b", "c"]

@@ -64,20 +64,36 @@ class TargetIceberg(Target):
         th.Property(
             "column_renames",
             th.StringType,
-            description="Map of column renames e.g. { 'old table name': 'new_table_name' }",
+            description='Map of column renames e.g. { "old table name": "new_table_name" }',
         ),
         th.Property(
             "table_renames",
             th.StringType,
-            description="Map of table renames e.g. { 'old table name': 'new_table_name' }. "
-                        "This is useful if you want to rename a stream if name is invalid.",
+            description='Map of table renames e.g. { "old table name": "new_table_name" }. '
+                        'This is useful if you want to rename a stream if name is invalid.',
         ),
         th.Property(
             "overwrite_data_for_streams",
             th.StringType,
-            description="List ist of stream names for which existing data should be overwritten. "
-                        "e.g. [ 'stream 1', 'stream 2' ]."
-                        "Otherwise new data will be appended.",
+            description='List of stream names for which existing data should be overwritten. '
+                        'e.g. [ "stream 1", "stream 2" ].'
+                        'Otherwise new data will be appended.',
+            default="",
+        ),
+        th.Property(
+            "upsert_data_for_streams",
+            th.StringType,
+            description="Json list of stream names for which upsert should be used. This requires a primary"
+                        "key to be set either automatically via key_properties stream definition or explicitly via the"
+                        "primary_key_for_streams parameter.",
+            default="",
+        ),
+        th.Property(
+            "primary_key_for_streams",
+            th.StringType,
+            description='Map with stream names and their list of primary keys e.g. '
+                        '{ "stream1": ["column1","column2"], "stream2": "column1" }. Used only if stream is in upsert_data_for_streams.'
+                        '* can be used instead of list of columns to deduplicate by all columns.',
             default="",
         ),
     ).to_dict()
