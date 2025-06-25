@@ -56,7 +56,7 @@ def test_initialization_upsert_validation():
         ("str_column", {"type": "string"}, ["str_column"], pa.string(), False),
         ("int_column", {"type": ["null", "integer"]}, [], pa.int64(), True),
         ("int_nullable", {"anyOf": [{"type": "integer"}, {"type": "NULL"}]}, ["int_nullable"], pa.int64(), True),
-        ("time_nullable", {"type": "string", "format": "date-time"}, ["time_nullable"], pa.timestamp("us"), False),
+        ("time_nullable", {"type": "string", "format": "date-time"}, ["time_nullable"], pa.timestamp("us", tz="UTC"), False),
         ("str_column", {}, ["str_column"], pa.string(), False),
     ]
 )
