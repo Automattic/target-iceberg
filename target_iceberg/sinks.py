@@ -168,6 +168,7 @@ class IcebergSink(BatchSink):
             else:
                 if self.upsert_data:
                     if self.deduplicate_data:
+                        self.logger.info(f'Deduplicating batch')
                         new_data = deduplicate_table(new_data)
                     self.table.upsert(new_data, join_cols=self.primary_key)
                 else:
@@ -188,6 +189,7 @@ class IcebergSink(BatchSink):
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
             if self.deduplicate_data:
+                self.logger.info(f'Deduplicating data')
                 self.data_buffer = deduplicate_table(self.data_buffer)
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
