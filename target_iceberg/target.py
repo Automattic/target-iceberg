@@ -81,6 +81,14 @@ class TargetIceberg(Target):
             default="",
         ),
         th.Property(
+            "deduplicate_data_for_streams",
+            th.StringType,
+            description='List of stream names for which data should be deduplicated (using all columns). '
+                        'e.g. [ "stream 1", "stream 2" ].'
+                        'This can only be used together with upsert or data overwrite, not for incremental writing.',
+            default="",
+        ),
+        th.Property(
             "upsert_data_for_streams",
             th.StringType,
             description="Json list of stream names for which upsert should be used. This requires a primary"

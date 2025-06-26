@@ -7,6 +7,7 @@ from datetime import datetime
 from functools import cached_property
 
 import pyarrow as pa
+import pyarrow.compute as pc
 from pyiceberg.catalog import load_catalog
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
@@ -48,6 +49,11 @@ class IcebergSink(BatchSink):
         if self.upsert_data and not self.primary_key:
             raise ConfigValidationError("Upsert is set, but no primary key defined.")
 
+        # We can't do deduplication for incremental writing as deduplication is done in memory and we don't have the
+        # entire data set in memory to perform it.
+        if self.deduplicate_data and not self.upsert_data and not self.overwrite_data:
+            raise ConfigValidationError("Deduplication is only allowed when upsert or overwrite is enabled.")
+
     @cached_property
     def pyarrow_schema(self):
         return flatten_schema_to_pyarrow_schema(self.flatten_schema, self.column_renames)
@@ -83,19 +89,22 @@ class IcebergSink(BatchSink):
             self.config.get("column_renames", "{}"), config_name="column_renames", expected_type=dict))
         return {key: value for key, value in result.items() if key != value}
 
-    @cached_property
-    def overwrite_data(self) -> bool:
-        return bool([s for s in process_json_config(self.config.get("overwrite_data_for_streams") or '[]',
-                                                    config_name="overwrite_data_for_streams",
-                                                    expected_type=list)
+    def is_flag_set_for_streams(self, config_name: str) -> bool:
+        return bool([s for s in process_json_config(
+            self.config.get(config_name) or '[]', config_name=config_name, expected_type=list)
                      if s.strip().lower() == self.stream_name.lower()])
 
     @cached_property
+    def overwrite_data(self) -> bool:
+        return self.is_flag_set_for_streams("overwrite_data_for_streams")
+
+    @cached_property
     def upsert_data(self) -> bool:
-        return bool([s for s in process_json_config(self.config.get("upsert_data_for_streams") or '[]',
-                                                    config_name="upsert_data_for_streams",
-                                                    expected_type=list)
-                     if s.strip().lower() == self.stream_name.lower()])
+        return self.is_flag_set_for_streams("upsert_data_for_streams")
+
+    @cached_property
+    def deduplicate_data(self) -> bool:
+        return self.is_flag_set_for_streams("deduplicate_data_for_streams")
 
     @cached_property
     def primary_key(self) -> list[str]:
@@ -158,10 +167,12 @@ class IcebergSink(BatchSink):
                 # If data is to be overwritten, we buffer it all in memory and write at the end
                 self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
             else:
-                    if self.upsert_data:
-                        self.table.upsert(new_data, join_cols=self.primary_key)
-                    else:
-                        self.table.append(new_data)
+                if self.upsert_data:
+                    if self.deduplicate_data:
+                        new_data = pc.unique(new_data)
+                    self.table.upsert(new_data, join_cols=self.primary_key)
+                else:
+                    self.table.append(new_data)
             del context["records"]
         except Exception as e:
             self.logger.error(f"Failed to process batch: {e}")
@@ -177,6 +188,8 @@ class IcebergSink(BatchSink):
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
+            if self.deduplicate_data:
+                self.data_buffer = pc.unique(self.data_buffer)
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
         super().clean_up()
