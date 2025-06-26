@@ -109,9 +109,4 @@ def process_json_config(config, config_name, expected_type):
     return value
 
 def deduplicate_table(table: pa.Table) -> pa.Table:
-    struct_array = pa.StructArray.from_arrays(
-        [table[col] for col in table.column_names],
-        fields=[table.schema.field(col) for col in table.column_names]
-    )
-    unique_indices = pc.unique_indices(struct_array)
-    return table.take(unique_indices)
+    return table.combine_chunks().group_by(table.column_names).aggregate([])
