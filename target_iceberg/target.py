@@ -83,9 +83,9 @@ class TargetIceberg(Target):
         th.Property(
             "deduplicate_data_for_streams",
             th.StringType,
-            description='List of stream names for which existing data should be overwritten. '
+            description='List of stream names for which data should be deduplicated (using all columns). '
                         'e.g. [ "stream 1", "stream 2" ].'
-                        'Otherwise new data will be appended.',
+                        'This can only be used together with upsert or data overwrite, not for incremental writing.',
             default="",
         ),
         th.Property(
