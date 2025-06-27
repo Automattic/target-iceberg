@@ -1,6 +1,7 @@
 import pytest
+import pyarrow as pa
 from singer_sdk.exceptions import ConfigValidationError
-from target_iceberg.utils import process_json_config, clean_split, to_snake_case
+from target_iceberg.utils import process_json_config, to_snake_case, deduplicate_table
 
 def test_valid_dict_input():
     config = '{"key": "value"}'
@@ -27,5 +28,19 @@ def test_wrong_type():
 def test_to_snake_case_basic():
     assert to_snake_case("someVariableName") == "some_variable_name"
 
-def test_clean_and_split():
-    assert clean_split(" a , , b ,c , , ", ",") == ["a", "b", "c"]
+
+def test_deduplication():
+    data = {
+        "id": pa.array([1, 2, 2, 3, 1]),
+        "value": pa.array(["a", "b", "b", "c", "a"])
+    }
+    table = pa.table(data)
+
+    deduped = deduplicate_table(table)
+
+    expected = pa.table({
+        "id": pa.array([1, 2, 3]),
+        "value": pa.array(["a", "b", "c"])
+    })
+
+    assert deduped == expected

@@ -7,14 +7,13 @@ from datetime import datetime
 from functools import cached_property
 
 import pyarrow as pa
-import pyarrow.compute as pc
 from pyiceberg.catalog import load_catalog
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
 
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
-                                  clean_split, to_snake_case)
+                                  deduplicate_table, to_snake_case)
 
 
 SYNCED_COLUMN_NAME = "synced_ms"
@@ -169,7 +168,8 @@ class IcebergSink(BatchSink):
             else:
                 if self.upsert_data:
                     if self.deduplicate_data:
-                        new_data = pc.unique(new_data)
+                        self.logger.info(f'Deduplicating batch')
+                        new_data = deduplicate_table(new_data)
                     self.table.upsert(new_data, join_cols=self.primary_key)
                 else:
                     self.table.append(new_data)
@@ -189,7 +189,8 @@ class IcebergSink(BatchSink):
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
             if self.deduplicate_data:
-                self.data_buffer = pc.unique(self.data_buffer)
+                self.logger.info(f'Deduplicating data')
+                self.data_buffer = deduplicate_table(self.data_buffer)
             self.logger.info(f'Overwriting data in the table {self.table_name}')
             self.table.overwrite(self.data_buffer)
         super().clean_up()

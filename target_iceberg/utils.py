@@ -7,6 +7,7 @@ import ast
 import re
 import pyarrow as pa
 import json
+import pyarrow.compute as pc
 
 from singer_sdk.exceptions import ConfigValidationError
 
@@ -95,11 +96,6 @@ def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
 def to_snake_case(text: str) -> str:
     return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
 
-
-def clean_split(text: str, sep: str) -> list[str]:
-    # split and strip and eliminate empty elements
-    return [part.strip() for part in text.split(sep) if part.strip()]
-
 def process_json_config(config, config_name, expected_type):
     try:
         value = json.loads(config)
@@ -111,3 +107,6 @@ def process_json_config(config, config_name, expected_type):
             f"Invalid type for config {config_name}: {type(value)} -> {config}. \nExpected type: {expected_type}."
         )
     return value
+
+def deduplicate_table(table: pa.Table) -> pa.Table:
+    return table.combine_chunks().group_by(table.column_names).aggregate([])
