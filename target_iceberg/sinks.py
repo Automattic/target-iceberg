@@ -13,7 +13,7 @@ from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
 
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
-                                  deduplicate_table, to_snake_case)
+                                  deduplicate_table, to_snake_case, schemas_match)
 
 
 SYNCED_COLUMN_NAME = "synced_ms"
@@ -127,7 +127,19 @@ class IcebergSink(BatchSink):
 
     @cached_property
     def table(self):
-        return self.get_table()
+        if not self.catalog.table_exists(self.table_name):
+            self.logger.info(f'Table {self.table_name} does not exist, so creating it')
+            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+        else:
+            existing_table =  self.catalog.load_table(self.table_name)
+            existing_schema = existing_table.schema().as_arrow()
+            if self.overwrite_data and not schemas_match(existing_schema, self.pyarrow_schema):
+                self.logger.warning(
+                    f"Schema mismatch detected and overwrite enabled. Dropping and recreating table {self.table_name}")
+                self.catalog.drop_table(self.table_name)
+                return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+            else:
+                return existing_table
 
     @cached_property
     def max_size(self) -> int:
@@ -177,13 +189,6 @@ class IcebergSink(BatchSink):
         except Exception as e:
             self.logger.error(f"Failed to process batch: {e}")
             raise e
-
-    def get_table(self):
-        if not self.catalog.table_exists(self.table_name):
-            self.logger.info(f'Table {self.table_name} does not exist, so creating it')
-            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
-        else:
-            return self.catalog.load_table(self.table_name)
 
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""

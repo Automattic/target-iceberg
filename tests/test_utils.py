@@ -1,7 +1,7 @@
 import pytest
 import pyarrow as pa
 from singer_sdk.exceptions import ConfigValidationError
-from target_iceberg.utils import process_json_config, to_snake_case, deduplicate_table
+from target_iceberg.utils import process_json_config, to_snake_case, deduplicate_table, schemas_match
 
 def test_valid_dict_input():
     config = '{"key": "value"}'
@@ -44,3 +44,15 @@ def test_deduplication():
     })
 
     assert deduped == expected
+
+def test_schemas_match_equal():
+    schema1 = pa.schema([("id", pa.int64()), ("name", pa.string())])
+    schema2 = pa.schema([("id", pa.int64()), ("name", pa.string())], metadata={b"source": b"system_a"})
+
+    assert schemas_match(schema1, schema2)
+
+def test_schemas_match_different_type():
+    schema1 = pa.schema([("id", pa.int64())])
+    schema2 = pa.schema([("id", pa.string())])
+
+    assert not schemas_match(schema1, schema2)
