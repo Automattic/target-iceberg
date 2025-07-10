@@ -126,6 +126,15 @@ class IcebergSink(BatchSink):
         return load_catalog("default")
 
     @cached_property
+    def max_size(self) -> int:
+        """Get max batch size.
+
+        Returns:
+            Max number of records to batch before `is_full=True`
+        """
+        return self.config.get("max_batch_size", 10000)
+
+    @cached_property
     def table(self):
         if not self.catalog.table_exists(self.table_name):
             self.logger.info(f'Table {self.table_name} does not exist, so creating it')
@@ -140,15 +149,6 @@ class IcebergSink(BatchSink):
                 return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
             else:
                 return existing_table
-
-    @cached_property
-    def max_size(self) -> int:
-        """Get max batch size.
-
-        Returns:
-            Max number of records to batch before `is_full=True`
-        """
-        return self.config.get("max_batch_size", 10000)
 
     def process_record(self, record: dict, context: dict) -> None:
         try:
