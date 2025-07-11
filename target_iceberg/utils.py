@@ -7,7 +7,6 @@ import ast
 import re
 import pyarrow as pa
 import json
-import pyarrow.compute as pc
 
 from singer_sdk.exceptions import ConfigValidationError
 
@@ -93,8 +92,10 @@ def create_pyarrow_table(list_dict: list[dict], schema: pa.Schema) -> pa.Table:
     data = {f: [_convert_decimal(row.get(f)) for row in list_dict] for f in schema.names}
     return pa.table(data).cast(schema)
 
+
 def to_snake_case(text: str) -> str:
     return re.sub(r'([a-z])([A-Z])', r'\1_\2', text).lower()
+
 
 def process_json_config(config, config_name, expected_type):
     try:
@@ -108,5 +109,10 @@ def process_json_config(config, config_name, expected_type):
         )
     return value
 
+
 def deduplicate_table(table: pa.Table) -> pa.Table:
     return table.combine_chunks().group_by(table.column_names).aggregate([])
+
+
+def schemas_match(schema1: pa.Schema, schema2: pa.Schema) -> bool:
+    return schema1.equals(schema2, check_metadata=False)
