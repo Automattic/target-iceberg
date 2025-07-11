@@ -17,6 +17,8 @@ from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarro
 
 
 SYNCED_COLUMN_NAME = "synced_ms"
+# Automatically add _ suffix to columns which can break scala code generated definitions
+AUTOMATIC_COLUMN_RENAMES = {"public", "org", "private", "default", "schema", "uuid"}
 
 class IcebergSink(BatchSink):
     def __init__(self, target, schema, stream_name, key_properties) -> None:
@@ -83,8 +85,11 @@ class IcebergSink(BatchSink):
 
     @cached_property
     def column_renames(self) -> dict[str, str]:
+
         result = {key: re.sub(r'[\s\.,]+', '_', key).lower()
                                for key in self.flatten_schema.get("properties", {}).keys()}
+        result.update({key: f"{key}_" for key in self.flatten_schema.get("properties", {}).keys()
+                       if key in AUTOMATIC_COLUMN_RENAMES})
         result.update(process_json_config(
             self.config.get("column_renames", "{}"), config_name="column_renames", expected_type=dict))
         return {key: value for key, value in result.items() if key != value}
