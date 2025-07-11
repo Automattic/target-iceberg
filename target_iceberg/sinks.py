@@ -67,10 +67,11 @@ class IcebergSink(BatchSink):
             snake_case_stream_name = table_renames.get(self.stream_name, table_renames.get('*', snake_case_stream_name))
 
         table_name_prefix = f"{self.config.get('table_name_prefix')}_" if self.config.get("table_name_prefix") else ""
+        table_name_suffix = f"_{self.config.get('table_name_suffix')}" if self.config.get("table_name_suffix") else ""
         if self.config.get('prod'):
-            return f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}"
+            return f"{self.config['db_name']}.{table_name_prefix}{snake_case_stream_name}{table_name_suffix}"
         else:
-            return f"scratch.{self.config['db_name']}__{table_name_prefix}{snake_case_stream_name}"
+            return f"scratch.{self.config['db_name']}__{table_name_prefix}{snake_case_stream_name}{table_name_suffix}"
 
     @cached_property
     def flatten_schema(self):

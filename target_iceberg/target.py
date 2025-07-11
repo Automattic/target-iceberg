@@ -41,7 +41,14 @@ class TargetIceberg(Target):
             "table_name_prefix",
             th.StringType,
             title="Table name prefix",
-            description="Additional table name prefix e.g. 'a4a' would result in a table name like 'my_db.a4a_raw_users'.",
+            description="Additional table name prefix e.g. 'a4a' would result in a table name like 'my_db.a4a_users'.",
+        ),
+        th.Property(
+            "table_name_suffix",
+            th.StringType,
+            title="Table name suffix",
+            description="Additional table name suffix e.g. 'tumblr' "
+                        "would result in a table name like 'my_db.users_tumblr'.",
         ),
         th.Property(
             "max_batch_size",
