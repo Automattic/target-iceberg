@@ -10,10 +10,12 @@ from target_iceberg.utils import _field_type_to_pyarrow_field
 TEST_CONFIG = {"db_name": "test_db", "column_renames": '{ "old1": "new1", "old2": "new2" }',
                "upsert_data_for_streams": '["test"]', "deduplicate_data_for_streams": '["test"]',
                "primary_key_for_streams": '{ "test": ["new1"] }'}
-TEST_CONFIG_2 = {"db_name": "test_db", "table_renames": '{ "test": "test_renamed" }', "table_name_prefix": "raw"}
+TEST_CONFIG_2 = {"db_name": "test_db", "table_renames": '{ "test": "test_renamed" }', "table_name_prefix": "raw",
+                 "table_name_suffix": "suf"}
 TEST_CONFIG_3 = {"db_name": "test_db", "overwrite_data_for_streams": '["test"]', "prod": True}
 
 TEST_SCHEMA = {"properties": {
+        "public": {"type": "string"},
         "old1": {"type": "string"},
         "old2": {"type": "string"},
         "Co l": {"type": "string"},
@@ -31,14 +33,14 @@ def get_test_sink(config_base: dict, config_overwrites: dict = None):
 
 def test_initialization():
     sink = get_test_sink(TEST_CONFIG)
-    assert sink.column_renames == {'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
+    assert sink.column_renames == {'public': 'public_', 'Co l': 'co_l', 'old1': 'new1', 'old2': 'new2'}
     assert sink.table_name == "scratch.test_db__test"
     assert sink.upsert_data == True
     assert sink.deduplicate_data == True
     assert sink.primary_key == ["new1"]
 
     sink = get_test_sink(TEST_CONFIG_2)
-    assert sink.table_name == "scratch.test_db__raw_test_renamed"
+    assert sink.table_name == "scratch.test_db__raw_test_renamed_suf"
 
     sink = get_test_sink(TEST_CONFIG_3)
     assert sink.overwrite_data == True
