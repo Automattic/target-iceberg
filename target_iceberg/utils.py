@@ -114,5 +114,25 @@ def deduplicate_table(table: pa.Table) -> pa.Table:
     return table.combine_chunks().group_by(table.column_names).aggregate([])
 
 
-def schemas_match(schema1: pa.Schema, schema2: pa.Schema) -> bool:
-    return schema1.equals(schema2, check_metadata=False)
+def schemas_match(old: pa.Schema, new: pa.Schema) -> bool:
+    result = old.equals(new, check_metadata=False)
+    if not result:
+        differences = []
+
+        fields1 = {field.name: field for field in old}
+        fields2 = {field.name: field for field in new}
+
+        all_field_names = set(fields1.keys()) | set(fields2.keys())
+
+        for name in sorted(all_field_names):
+            field1 = fields1.get(name)
+            field2 = fields2.get(name)
+            if field1 and not field2:
+                differences.append(f"Field '{name}' is only in old: {field1}")
+            elif not field1 and field2:
+                differences.append(f"Field '{name}' is only in new: {field2}")
+            elif field1 != field2:
+                differences.append(f"Field '{name}' differs:\n  old: {field1}\n  new: {field2}")
+
+        logger.info(f"Schema mismatch detected between '{old}' and '{new}':\n" + "\n".join(differences))
+    return result
