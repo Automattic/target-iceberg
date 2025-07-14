@@ -115,7 +115,7 @@ def deduplicate_table(table: pa.Table) -> pa.Table:
 
 
 def are_types_equivalent(type1: pa.DataType, type2: pa.DataType) -> bool:
-    # We treat string i large_string as same type
+    # We treat string and large_string as same type
     return ({type1, type2} <= {pa.string(), pa.large_string()}
             or type1 == type2)
 
