@@ -114,5 +114,33 @@ def deduplicate_table(table: pa.Table) -> pa.Table:
     return table.combine_chunks().group_by(table.column_names).aggregate([])
 
 
-def schemas_match(schema1: pa.Schema, schema2: pa.Schema) -> bool:
-    return schema1.equals(schema2, check_metadata=False)
+def are_types_equivalent(type1: pa.DataType, type2: pa.DataType) -> bool:
+    # We treat string and large_string as same type
+    return ({type1, type2} <= {pa.string(), pa.large_string()}
+            or type1 == type2)
+
+
+def schemas_match(old: pa.Schema, new: pa.Schema) -> bool:
+    old_fields = {field.name: field for field in old}
+    new_fields = {field.name: field for field in new}
+    all_field_names = set(old_fields.keys()) | set(new_fields.keys())
+
+    differences = []
+
+    for name in sorted(all_field_names):
+        f_old = old_fields.get(name)
+        f_new = new_fields.get(name)
+
+        if f_old and not f_new:
+            differences.append(f"Field '{name}' only in old schema: {f_old}")
+        elif not f_old and f_new:
+            differences.append(f"Field '{name}' only in new schema: {f_new}")
+        elif not are_types_equivalent(f_old.type, f_new.type):
+            differences.append(f"Field '{name}' type differs:\n  old: {f_old}\n  new: {f_new}")
+        elif f_old.nullable != f_new.nullable:
+            differences.append(f"Field '{name}' nullability differs:\n  old: {f_old}\n  new: {f_new}")
+
+    if differences:
+        logger.info(f"Schema mismatch detected between\n\n'{old}'\n\nand\n\n'{new}':\n\n" + "\n".join(differences))
+        return False
+    return True

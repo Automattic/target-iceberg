@@ -47,7 +47,7 @@ def test_deduplication():
 
 def test_schemas_match_equal():
     schema1 = pa.schema([("id", pa.int64()), ("name", pa.string())])
-    schema2 = pa.schema([("id", pa.int64()), ("name", pa.string())], metadata={b"source": b"system_a"})
+    schema2 = pa.schema([("id", pa.int64()), ("name", pa.large_string())], metadata={b"source": b"system_a"})
 
     assert schemas_match(schema1, schema2)
 
