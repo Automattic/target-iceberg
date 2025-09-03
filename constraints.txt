@@ -61,7 +61,7 @@ pydantic-core==2.33.2
     # via pydantic
 pygments==2.19.2
     # via rich
-pyiceberg[hive]==0.9.1
+pyiceberg==0.9.1
     # via target-iceberg (pyproject.toml)
 pyparsing==3.2.3
     # via pyiceberg
