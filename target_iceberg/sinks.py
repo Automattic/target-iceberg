@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime
 from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from pyiceberg.exceptions import CommitFailedException
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
@@ -15,8 +17,8 @@ from singer_sdk.exceptions import ConfigValidationError
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
                                   deduplicate_table, to_snake_case, schemas_match)
 
-from a8cdt import sparksql
-
+COMMIT_MAX_ATTEMPTS = 15
+COMMIT_RETRY_DELAY = 60
 
 SYNCED_COLUMN_NAME = "synced_ms"
 # Automatically add _ suffix to columns which can break scala code generated definitions
@@ -190,11 +192,24 @@ class IcebergSink(BatchSink):
                     if self.deduplicate_data:
                         self.logger.info(f'Deduplicating batch')
                         new_data = deduplicate_table(new_data)
-                    sparksql.lock_table(full_table_name=self.table_name)
-                    try:
-                        self.table.upsert(new_data, join_cols=self.primary_key)
-                    finally:
-                        sparksql.unlock_table(full_table_name=self.table_name)
+                    attempt_no = 0
+
+                    # In some cases we write to the same table from multiple jobs
+                    # and the standard lock timeout is only 10 seconds, so we do some retries
+                    while True:
+                        try:
+                            attempt_no += 1
+                            self.table.upsert(new_data, join_cols=self.primary_key)
+                            self.logger.info(f"Upsert succeeded after {attempt_no} attempt(s).")
+                            break
+                        except CommitFailedException as e:
+                            self.logger.warning(f"Commit attempt {attempt_no} failed: {e}")
+                            if attempt_no < COMMIT_MAX_ATTEMPTS:
+                                self.logger.info(f"Retrying in {COMMIT_RETRY_DELAY} seconds...")
+                                time.sleep(COMMIT_RETRY_DELAY)
+                            else:
+                                self.logger.error("Max retries reached. Raising exception.")
+                                raise
                 else:
                     self.table.append(new_data)
             del context["records"]

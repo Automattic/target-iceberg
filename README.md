@@ -15,8 +15,7 @@ pip install -e .
 `constraints.txt` generation:
 
 ```bash
-$ poetry self add poetry-plugin-export
-$ poetry export --output constraints.txt --without-hashes
+$ pip-compile --generate-hashes --output-file=constraints.txt
 ```
 and replace hashed with tagged version in `constraints.txt`:
 `target-iceberg @ git+https://github.com/Automattic/target-iceberg.git@v1.20.0 ; python_version >= "3.9" and python_version < "4"`
