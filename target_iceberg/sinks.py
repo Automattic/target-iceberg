@@ -15,6 +15,8 @@ from singer_sdk.exceptions import ConfigValidationError
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
                                   deduplicate_table, to_snake_case, schemas_match)
 
+from a8cdt import sparksql
+
 
 SYNCED_COLUMN_NAME = "synced_ms"
 # Automatically add _ suffix to columns which can break scala code generated definitions
@@ -188,7 +190,11 @@ class IcebergSink(BatchSink):
                     if self.deduplicate_data:
                         self.logger.info(f'Deduplicating batch')
                         new_data = deduplicate_table(new_data)
-                    self.table.upsert(new_data, join_cols=self.primary_key)
+                    sparksql.lock_table(full_table_name=self.table_name)
+                    try:
+                        self.table.upsert(new_data, join_cols=self.primary_key)
+                    finally:
+                        sparksql.unlock_table(full_table_name=self.table_name)
                 else:
                     self.table.append(new_data)
             del context["records"]
