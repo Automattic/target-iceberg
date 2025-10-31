@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from functools import cached_property
+from tenacity import retry, stop_after_attempt, wait_fixed, before_sleep_log, retry_if_exception_type
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from pyiceberg.exceptions import CommitFailedException
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
@@ -15,6 +17,8 @@ from singer_sdk.exceptions import ConfigValidationError
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
                                   deduplicate_table, to_snake_case, schemas_match)
 
+COMMIT_MAX_ATTEMPTS = 30
+COMMIT_RETRY_DELAY = 60
 
 SYNCED_COLUMN_NAME = "synced_ms"
 # Automatically add _ suffix to columns which can break scala code generated definitions
@@ -174,6 +178,17 @@ class IcebergSink(BatchSink):
             self.logger.error(f"Failed to process record: {e}")
             raise e
 
+    @retry(
+        retry=retry_if_exception_type(CommitFailedException),
+        stop=stop_after_attempt(COMMIT_MAX_ATTEMPTS),
+        wait=wait_fixed(COMMIT_RETRY_DELAY),
+        reraise=True,
+    )
+    def upsert_with_retry(self, new_data):
+        self.logger.info("Attempting to upsert data")
+        self.table.upsert(new_data, join_cols=self.primary_key)
+        self.logger.info("Upsert succeeded")
+
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
                          f'with {len(context["records"])} records.')
@@ -188,7 +203,8 @@ class IcebergSink(BatchSink):
                     if self.deduplicate_data:
                         self.logger.info(f'Deduplicating batch')
                         new_data = deduplicate_table(new_data)
-                    self.table.upsert(new_data, join_cols=self.primary_key)
+
+                    self.upsert_with_retry(new_data)
                 else:
                     self.table.append(new_data)
             del context["records"]
