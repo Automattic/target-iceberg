@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-import time
 from datetime import datetime
 from functools import cached_property
+from tenacity import retry, stop_after_attempt, wait_fixed, before_sleep_log, retry_if_exception_type
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
@@ -178,6 +178,17 @@ class IcebergSink(BatchSink):
             self.logger.error(f"Failed to process record: {e}")
             raise e
 
+    @retry(
+        retry=retry_if_exception_type(CommitFailedException),
+        stop=stop_after_attempt(COMMIT_MAX_ATTEMPTS),
+        wait=wait_fixed(COMMIT_RETRY_DELAY),
+        reraise=True,
+    )
+    def upsert_with_retry(self, new_data):
+        self.logger.info("Attempting to upsert data")
+        self.table.upsert(new_data, join_cols=self.primary_key)
+        self.logger.info("Upsert succeeded")
+
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
                          f'with {len(context["records"])} records.')
@@ -192,24 +203,8 @@ class IcebergSink(BatchSink):
                     if self.deduplicate_data:
                         self.logger.info(f'Deduplicating batch')
                         new_data = deduplicate_table(new_data)
-                    attempt_no = 0
 
-                    # In some cases we write to the same table from multiple jobs
-                    # and the standard lock timeout is only 10 seconds, so we do some retries
-                    while True:
-                        try:
-                            attempt_no += 1
-                            self.table.upsert(new_data, join_cols=self.primary_key)
-                            self.logger.info(f"Upsert succeeded after {attempt_no} attempt(s).")
-                            break
-                        except CommitFailedException as e:
-                            self.logger.warning(f"Commit attempt {attempt_no} failed: {e}")
-                            if attempt_no < COMMIT_MAX_ATTEMPTS:
-                                self.logger.info(f"Retrying in {COMMIT_RETRY_DELAY} seconds...")
-                                time.sleep(COMMIT_RETRY_DELAY)
-                            else:
-                                self.logger.error("Max retries reached. Raising exception.")
-                                raise
+                    self.upsert_with_retry(new_data)
                 else:
                     self.table.append(new_data)
             del context["records"]
