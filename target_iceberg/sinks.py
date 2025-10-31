@@ -17,7 +17,7 @@ from singer_sdk.exceptions import ConfigValidationError
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
                                   deduplicate_table, to_snake_case, schemas_match)
 
-COMMIT_MAX_ATTEMPTS = 15
+COMMIT_MAX_ATTEMPTS = 30
 COMMIT_RETRY_DELAY = 60
 
 SYNCED_COLUMN_NAME = "synced_ms"
