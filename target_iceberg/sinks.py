@@ -5,20 +5,16 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from functools import cached_property
-from tenacity import retry, stop_after_attempt, wait_fixed, before_sleep_log, retry_if_exception_type
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
-from pyiceberg.exceptions import CommitFailedException
+from pyiceberg.partitioning import PartitionSpec
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
 
 from target_iceberg.utils import (create_pyarrow_table, flatten_schema_to_pyarrow_schema, process_json_config,
                                   deduplicate_table, to_snake_case, schemas_match)
-
-COMMIT_MAX_ATTEMPTS = 30
-COMMIT_RETRY_DELAY = 60
 
 SYNCED_COLUMN_NAME = "synced_ms"
 # Automatically add _ suffix to columns which can break scala code generated definitions
@@ -132,14 +128,38 @@ class IcebergSink(BatchSink):
         return key
 
     @cached_property
+    def partitions(self) -> list[str]:
+        partitions_streams = process_json_config(self.config.get("partitions_for_streams") or '{}',
+                                                    config_name="partitions_for_streams",
+                                                    expected_type=dict)
+        partitions = partitions_streams.get(self.stream_name, [])
+
+        if not set(partitions).issubset(set(self.pyarrow_schema.names)):
+            raise ConfigValidationError(
+                f"Some partition columns {partitions} do not exist in table schema: {self.pyarrow_schema.names}")
+
+        return partitions
+
+    @cached_property
     def catalog(self):
         return load_catalog("default")
+
+    def create_table(self):
+        if self.partitions:
+            spec = PartitionSpec()
+            for col in self.partitions:
+                spec = spec.add(identity=col)
+            table = self.catalog.create_table(self.table_name, schema=self.pyarrow_schema, partition_spec=spec)
+        else:
+            table = self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+
+        return table
 
     @cached_property
     def table(self):
         if not self.catalog.table_exists(self.table_name):
             self.logger.info(f'Table {self.table_name} does not exist, so creating it')
-            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+            return self.create_table()
         else:
             existing_table =  self.catalog.load_table(self.table_name)
             existing_schema = existing_table.schema().as_arrow()
@@ -147,7 +167,7 @@ class IcebergSink(BatchSink):
                 self.logger.warning(
                     f"Schema mismatch detected and overwrite enabled. Dropping and recreating table {self.table_name}")
                 self.catalog.drop_table(self.table_name)
-                return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
+                return self.create_table()
             else:
                 return existing_table
 
@@ -178,39 +198,24 @@ class IcebergSink(BatchSink):
             self.logger.error(f"Failed to process record: {e}")
             raise e
 
-    @retry(
-        retry=retry_if_exception_type(CommitFailedException),
-        stop=stop_after_attempt(COMMIT_MAX_ATTEMPTS),
-        wait=wait_fixed(COMMIT_RETRY_DELAY),
-        reraise=True,
-    )
-    def upsert_with_retry(self, new_data):
-        self.logger.info("Attempting to upsert data")
-        self.table.upsert(new_data, join_cols=self.primary_key)
-        self.logger.info("Upsert succeeded")
-
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
                          f'with {len(context["records"])} records.')
-        try:
-            new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
-            self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
-            if self.overwrite_data:
-                # If data is to be overwritten, we buffer it all in memory and write at the end
-                self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
-            else:
-                if self.upsert_data:
-                    if self.deduplicate_data:
-                        self.logger.info(f'Deduplicating batch')
-                        new_data = deduplicate_table(new_data)
+        new_data = create_pyarrow_table(context.get("records", []), self.pyarrow_schema)
+        self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
+        if self.overwrite_data:
+            # If data is to be overwritten, we buffer it all in memory and write at the end
+            self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
+        else:
+            if self.upsert_data:
+                if self.deduplicate_data:
+                    self.logger.info(f'Deduplicating batch')
+                    new_data = deduplicate_table(new_data)
 
-                    self.upsert_with_retry(new_data)
-                else:
-                    self.table.append(new_data)
-            del context["records"]
-        except Exception as e:
-            self.logger.error(f"Failed to process batch: {e}")
-            raise e
+                self.table.upsert(new_data, join_cols=self.primary_key)
+            else:
+                self.table.append(new_data)
+        del context["records"]
 
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
