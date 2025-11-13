@@ -134,7 +134,7 @@ class IcebergSink(BatchSink):
     def table(self):
         if not self.catalog.table_exists(self.table_name):
             self.logger.info(f'Table {self.table_name} does not exist, so creating it')
-            return self.create_table()
+            return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
         else:
             existing_table =  self.catalog.load_table(self.table_name)
             existing_schema = existing_table.schema().as_arrow()
