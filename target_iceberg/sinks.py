@@ -8,7 +8,6 @@ from functools import cached_property
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
-from pyiceberg.partitioning import PartitionSpec
 from singer_sdk.helpers._flattening import flatten_record, flatten_schema
 from singer_sdk.sinks import BatchSink
 from singer_sdk.exceptions import ConfigValidationError
@@ -128,32 +127,8 @@ class IcebergSink(BatchSink):
         return key
 
     @cached_property
-    def partitions(self) -> list[str]:
-        partitions_streams = process_json_config(self.config.get("partitions_for_streams") or '{}',
-                                                    config_name="partitions_for_streams",
-                                                    expected_type=dict)
-        partitions = partitions_streams.get(self.stream_name, [])
-
-        if not set(partitions).issubset(set(self.pyarrow_schema.names)):
-            raise ConfigValidationError(
-                f"Some partition columns {partitions} do not exist in table schema: {self.pyarrow_schema.names}")
-
-        return partitions
-
-    @cached_property
     def catalog(self):
         return load_catalog("default")
-
-    def create_table(self):
-        if self.partitions:
-            spec = PartitionSpec()
-            for col in self.partitions:
-                spec = spec.add(identity=col)
-            table = self.catalog.create_table(self.table_name, schema=self.pyarrow_schema, partition_spec=spec)
-        else:
-            table = self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
-
-        return table
 
     @cached_property
     def table(self):
@@ -167,7 +142,7 @@ class IcebergSink(BatchSink):
                 self.logger.warning(
                     f"Schema mismatch detected and overwrite enabled. Dropping and recreating table {self.table_name}")
                 self.catalog.drop_table(self.table_name)
-                return self.create_table()
+                return self.catalog.create_table(self.table_name, schema=self.pyarrow_schema)
             else:
                 return existing_table
 

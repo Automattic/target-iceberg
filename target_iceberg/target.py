@@ -111,14 +111,6 @@ class TargetIceberg(Target):
                         '* can be used instead of list of columns to deduplicate by all columns.',
             default="",
         ),
-        th.Property(
-            "partitions_for_streams",
-            th.StringType,
-            description='Map with stream names and their list of partitions e.g. '
-                        '{ "stream1": ["column1","column2"], "stream2": "column1" }.'
-                        'This is only used when the table is being newly created.',
-            default="",
-        ),
     ).to_dict()
 
     default_sink_class = IcebergSink
