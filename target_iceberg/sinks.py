@@ -187,7 +187,13 @@ class IcebergSink(BatchSink):
                     self.logger.info(f'Deduplicating batch')
                     new_data = deduplicate_table(new_data)
 
-                self.table.upsert(new_data, join_cols=self.primary_key)
+                try:
+                    self.logger.info(f"Starting upsert")
+                    self.table.upsert(new_data, join_cols=self.primary_key)
+                    self.logger.info(f"Finished upsert")
+                except:
+                    self.logger.exception(f"Failed to upsert data")
+                    raise
             else:
                 self.table.append(new_data)
         del context["records"]
