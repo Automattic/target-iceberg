@@ -193,7 +193,6 @@ class IcebergSink(BatchSink):
                     self.logger.info(f"Finished upsert")
                 except:
                     self.logger.exception(f"Failed to upsert data")
-                    raise
             else:
                 self.table.append(new_data)
         del context["records"]
