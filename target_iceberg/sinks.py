@@ -127,6 +127,12 @@ class IcebergSink(BatchSink):
         return key
 
     @cached_property
+    def deduplicate_on_primary_key(self) -> bool:
+        """Check if deduplication should be done based on primary key during record processing.
+        Only enabled when not using overwrite_data, as overwrite doesn't use keys."""
+        return self.deduplicate_data and bool(self.primary_key) and not self.overwrite_data
+
+    @cached_property
     def catalog(self):
         return load_catalog("default")
 
@@ -155,6 +161,30 @@ class IcebergSink(BatchSink):
         """
         return self.config.get("max_batch_size", 10000)
 
+    def process_record_with_key_deduplication(self, record: dict, context: dict) -> None:
+        # If deduplication on primary key is enabled, check for duplicates and replace if found
+        if self.deduplicate_on_primary_key:
+            """Add record to context, replacing any existing record with the same primary key."""
+            # Initialize the key-to-index map if it doesn't exist
+            if "key_to_index" not in context:
+                context["key_to_index"] = {}
+
+            # Create a key tuple from the primary key columns
+            key_tuple = tuple(record.get(k) for k in self.primary_key)
+
+            # Check if this key already exists
+            if key_tuple in context["key_to_index"]:
+                # Replace the existing record
+                existing_index = context["key_to_index"][key_tuple]
+                context["records"][existing_index] = record
+                self.logger.info(f"Found duplicated record based on key, replacing old entry with key: {key_tuple}")
+            else:
+                # Add new record and track its index
+                context["key_to_index"][key_tuple] = len(context["records"]) if "records" in context else 0
+                super().process_record(record, context)
+        else:
+            super().process_record(record, context)
+
     def process_record(self, record: dict, context: dict) -> None:
         try:
             record_flatten = (
@@ -168,10 +198,11 @@ class IcebergSink(BatchSink):
                 record_flatten[new_name] = record_flatten.pop(old_name, None)
             if not self.skip_add_synced_field:
                 record_flatten = record_flatten | { SYNCED_COLUMN_NAME: self.start_time }
-            super().process_record(record_flatten, context)
-        except Exception as e:
-            self.logger.error(f"Failed to process record: {e}")
-            raise e
+
+            self.process_record_with_key_deduplication(record_flatten, context)
+        except Exception:
+            self.logger.exception(f"Failed to process record")
+            raise
 
     def process_batch(self, context: dict) -> None:
         self.logger.info(f'Processing batch for {self.stream_name} - table {self.table_name} '
@@ -183,7 +214,8 @@ class IcebergSink(BatchSink):
             self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
         else:
             if self.upsert_data:
-                if self.deduplicate_data:
+                # Only use deduplicate_table if not using primary key-based deduplication
+                if self.deduplicate_data and not self.deduplicate_on_primary_key:
                     self.logger.info(f'Deduplicating batch')
                     new_data = deduplicate_table(new_data)
 
@@ -191,6 +223,9 @@ class IcebergSink(BatchSink):
             else:
                 self.table.append(new_data)
         del context["records"]
+        # Clean up key-to-index map if it exists
+        if "key_to_index" in context:
+            del context["key_to_index"]
 
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
