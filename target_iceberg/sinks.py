@@ -181,9 +181,9 @@ class IcebergSink(BatchSink):
             else:
                 # Add new record and track its index
                 context["key_to_index"][key_tuple] = len(context["records"]) if "records" in context else 0
-                super().process_record(record_flatten, context)
+                super().process_record(record, context)
         else:
-            super().process_record(record_flatten, context)
+            super().process_record(record, context)
 
     def process_record(self, record: dict, context: dict) -> None:
         try:
