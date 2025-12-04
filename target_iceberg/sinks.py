@@ -175,6 +175,7 @@ class IcebergSink(BatchSink):
             # Replace the existing record
             existing_index = context["key_to_index"][key_tuple]
             context["records"][existing_index] = record
+            self.logger.info(f"Found duplicated record based on key, replacing old entry with key: {key_tuple}")
         else:
             # Add new record and track its index
             context["key_to_index"][key_tuple] = len(context["records"])
