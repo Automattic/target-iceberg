@@ -1,6 +1,6 @@
 [project]
 name = "target-iceberg"
-version = "1.2.2"
+version = "1.2.3"
 description = "Singer target for iceberg, built with the Meltano Singer SDK."
 readme = "README.md"
 authors = [{ name = "Jarosław Cellary", email = "jcellary@gmail.com" }]
@@ -25,7 +25,7 @@ dependencies = [
     "singer-sdk~=0.46.3",
     "requests~=2.32.3",
     "pyarrow~=20.0.0",
-    "pyiceberg[hive]~=0.9.1",
+    "pyiceberg[hive] @ git+https://github.com/Automattic/iceberg-python.git@disable-locks",
 ]
 
 [project.optional-dependencies]
@@ -66,3 +66,5 @@ requires = [
     "hatchling>=1,<2",
 ]
 build-backend = "hatchling.build"
+[tool.hatch.metadata]
+allow-direct-references = true
