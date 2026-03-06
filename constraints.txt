@@ -507,7 +507,7 @@ pygments==2.19.2 \
     # via rich
 # WARNING: pip install will require the following package to be hashed.
 # Consider using a hashable URL like https://github.com/jazzband/pip-tools/archive/SOMECOMMIT.zip
-pyiceberg[hive] @ git+https://github.com/Automattic/iceberg-python.git@hive-lock-refactor
+pyiceberg[hive] @ git+https://github.com/Automattic/iceberg-python.git
     # via target-iceberg (pyproject.toml)
 pyparsing==3.2.3 \
     --hash=sha256:a749938e02d6fd0b59b356ca504a24982314bb090c383e3cf201c95ef7e2bfcf \
