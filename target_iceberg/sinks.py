@@ -134,7 +134,7 @@ class IcebergSink(BatchSink):
 
     @cached_property
     def catalog(self):
-        return load_catalog("default", **{"lock-enabled": "false"})
+        return load_catalog("default", **{"engine.hive.lock-enabled": "false"})
 
     @cached_property
     def table(self):
