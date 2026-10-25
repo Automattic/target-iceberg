@@ -144,6 +144,20 @@ class IcebergSink(BatchSink):
         else:
             existing_table =  self.catalog.load_table(self.table_name)
             existing_schema = existing_table.schema().as_arrow()
+            existing_fields = {field.name: field for field in existing_schema}
+            incompatible_fields = [
+                field.name for field in self.pyarrow_schema
+                if field.name in existing_fields
+                and field.nullable != existing_fields[field.name].nullable
+                and (self.overwrite_data or field.nullable)
+            ]
+            if incompatible_fields:
+                message = (
+                    f"Cannot write to {self.table_name}: incompatible nullability for "
+                    f"columns {', '.join(incompatible_fields)}. "
+                    "Align the writer and table schemas before retrying."
+                )
+                raise ConfigValidationError(message, errors=[message])
             if self.overwrite_data and not schemas_match(existing_schema, self.pyarrow_schema):
                 self.logger.warning(
                     f"Schema mismatch detected and overwrite enabled. Dropping and recreating table {self.table_name}")

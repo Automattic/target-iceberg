@@ -69,3 +69,103 @@ def test_field_type_to_pyarrow_field(field_name, input_types, required_fields, e
     assert field.name == field_name
     assert field.type == expected_type
     assert field.nullable == expected_nullable
+
+
+@pytest.mark.parametrize(
+    ("mode", "stored_nullable", "writer_nullable", "mixed"),
+    [
+        ("overwrite", True, False, False),
+        ("overwrite", False, True, False),
+        ("append", False, True, False),
+        ("upsert", False, True, False),
+        ("overwrite", True, False, True),
+    ],
+)
+def test_table_rejects_unsafe_nullability_before_mutation(
+    *,
+    mode: str,
+    stored_nullable: bool,
+    writer_nullable: bool,
+    mixed: bool,
+) -> None:
+    """Reject unsafe nullability even when another schema difference exists."""
+    config = {"db_name": "test_db", "skip_add_synced_field": True}
+    if mode != "append":
+        config[f"{mode}_data_for_streams"] = '["organizations"]'
+    target = mock.Mock()
+    target.config = config
+    schema = {
+        "properties": {
+            "id": {"type": "integer"},
+            "org": {"type": ["null", "string"] if writer_nullable else "string"},
+        },
+        "required": ["id", "org"],
+    }
+    sink = IcebergSink(target, schema, "organizations", ["id"])
+    catalog = mock.Mock()
+    existing_table = catalog.load_table.return_value
+    existing_table.schema.return_value.as_arrow.return_value = pa.schema(
+        [
+            pa.field("id", pa.string() if mixed else pa.int64(), nullable=False),
+            pa.field("org_", pa.large_string(), nullable=stored_nullable),
+        ]
+    )
+    sink.catalog = catalog
+
+    with pytest.raises(
+        ConfigValidationError, match="incompatible nullability for columns org_"
+    ):
+        _ = sink.table
+
+    catalog.drop_table.assert_not_called()
+    catalog.create_table.assert_not_called()
+    existing_table.append.assert_not_called()
+    existing_table.upsert.assert_not_called()
+    existing_table.overwrite.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "mode", ["append", "upsert", "overwrite", "new", "type-change"]
+)
+def test_table_preserves_supported_schema_paths(mode: str) -> None:
+    """Keep compatible writes, new tables, and unrelated schema changes working."""
+    config = {"db_name": "test_db", "skip_add_synced_field": True}
+    if mode in {"overwrite", "type-change"}:
+        config["overwrite_data_for_streams"] = '["organizations"]'
+    elif mode == "upsert":
+        config["upsert_data_for_streams"] = '["organizations"]'
+    target = mock.Mock()
+    target.config = config
+    schema = {
+        "properties": {"id": {"type": "integer"}, "org": {"type": "string"}},
+        "required": ["id", "org"],
+    }
+    sink = IcebergSink(target, schema, "organizations", ["id"])
+    catalog = mock.Mock()
+    catalog.table_exists.return_value = mode != "new"
+    existing_table = catalog.load_table.return_value
+    existing_table.schema.return_value.as_arrow.return_value = pa.schema(
+        [
+            pa.field(
+                "id", pa.string() if mode == "type-change" else pa.int64(),
+                nullable=False,
+            ),
+            pa.field("org_", pa.large_string(), nullable=mode in {"append", "upsert"}),
+        ]
+    )
+    sink.catalog = catalog
+
+    result = sink.table
+
+    if mode in {"new", "type-change"}:
+        assert result is catalog.create_table.return_value  # noqa: S101 - pytest result.
+        catalog.create_table.assert_called_once_with(
+            sink.table_name, schema=sink.pyarrow_schema
+        )
+    else:
+        assert result is existing_table  # noqa: S101 - pytest result.
+        catalog.create_table.assert_not_called()
+    if mode == "type-change":
+        catalog.drop_table.assert_called_once_with(sink.table_name)
+    else:
+        catalog.drop_table.assert_not_called()
