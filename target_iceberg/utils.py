@@ -73,8 +73,8 @@ def flatten_schema_to_pyarrow_schema(flatten_schema_dictionary: dict, column_ren
     return pa.schema(
         [
             _field_type_to_pyarrow_field(
-                column_renames.get(field_name, field_name), field_input_types, required_fields=required_fields
-            )
+                field_name, field_input_types, required_fields=required_fields
+            ).with_name(column_renames.get(field_name, field_name))
             for field_name, field_input_types in flatten_schema.items()
         ]
     )
