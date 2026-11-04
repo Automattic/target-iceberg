@@ -25,7 +25,7 @@ dependencies = [
     "singer-sdk~=0.46.3",
     "requests~=2.32.3",
     "pyarrow~=20.0.0",
-    "pyiceberg[hive] @ git+https://github.com/Automattic/iceberg-python.git",
+    "pyiceberg[hive] @ git+https://github.com/Automattic/iceberg-python.git@fc0586b4d1a01f044dc4154df4a8a5ac866e32fd",
 ]
 
 [project.optional-dependencies]
