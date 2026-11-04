@@ -30,10 +30,10 @@ class IcebergSink(BatchSink):
         try:
             self.flatten_max_level = self.config.get("max_flatten_level", 0)
             self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
-            self.data_buffer = None
             self.start_time = datetime.utcnow()
 
             self.validate_config()
+            self.data_buffer = self.pyarrow_schema.empty_table()
         except Exception as e:
             # add explicit logging, as for some reason meltano doesn't show the message in logs.
             self.logger.error(e)
@@ -211,7 +211,7 @@ class IcebergSink(BatchSink):
         self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
         if self.overwrite_data:
             # If data is to be overwritten, we buffer it all in memory and write at the end
-            self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
+            self.data_buffer = pa.concat_tables([self.data_buffer, new_data])
         else:
             if self.upsert_data:
                 # Only use deduplicate_table if not using primary key-based deduplication
