@@ -238,7 +238,7 @@ class IcebergSink(BatchSink):
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
             # Checked before the first access to self.table, which can drop and recreate the table.
-            if False:
+            if len(self.data_buffer) == 0 and not self.allow_empty:
                 raise ValueError(
                     f"Stream {self.stream_name} sent no records, so overwriting would empty "
                     f"table {self.table_name}. The table is unchanged. If this stream can be "
