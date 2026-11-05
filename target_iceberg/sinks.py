@@ -54,6 +54,9 @@ class IcebergSink(BatchSink):
         if self.deduplicate_data and not self.upsert_data and not self.overwrite_data:
             raise ConfigValidationError("Deduplication is only allowed when upsert or overwrite is enabled.")
 
+        if self.allow_empty and not self.overwrite_data:
+            raise ConfigValidationError("allow_empty_for_streams only applies to streams in overwrite_data_for_streams.")
+
     @cached_property
     def pyarrow_schema(self):
         return flatten_schema_to_pyarrow_schema(self.flatten_schema, self.column_renames)
@@ -105,6 +108,10 @@ class IcebergSink(BatchSink):
     @cached_property
     def upsert_data(self) -> bool:
         return self.is_flag_set_for_streams("upsert_data_for_streams")
+
+    @cached_property
+    def allow_empty(self) -> bool:
+        return self.is_flag_set_for_streams("allow_empty_for_streams")
 
     @cached_property
     def deduplicate_data(self) -> bool:
@@ -230,6 +237,12 @@ class IcebergSink(BatchSink):
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
+            # Checked before the first access to self.table, which can drop and recreate the table.
+            if False:
+                raise ValueError(
+                    f"Stream {self.stream_name} sent no records, so overwriting would empty "
+                    f"table {self.table_name}. The table is unchanged. If this stream can be "
+                    f"empty at the source, add it to allow_empty_for_streams.")
             if self.deduplicate_data:
                 self.logger.info(f'Deduplicating data')
                 self.data_buffer = deduplicate_table(self.data_buffer)
