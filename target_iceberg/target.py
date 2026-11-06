@@ -88,6 +88,14 @@ class TargetIceberg(Target):
             default="",
         ),
         th.Property(
+            "allow_empty_for_streams",
+            th.StringType,
+            description='List of overwritten stream names that may send no records, e.g. [ "stream 1" ]. '
+                        'An empty run of one of these streams empties its table. '
+                        'An empty run of any other overwritten stream fails and leaves the table unchanged.',
+            default="",
+        ),
+        th.Property(
             "deduplicate_data_for_streams",
             th.StringType,
             description='List of stream names for which data should be deduplicated (using all columns). '

@@ -30,10 +30,10 @@ class IcebergSink(BatchSink):
         try:
             self.flatten_max_level = self.config.get("max_flatten_level", 0)
             self.skip_add_synced_field = self.config.get("skip_add_synced_field", False)
-            self.data_buffer = None
             self.start_time = datetime.utcnow()
 
             self.validate_config()
+            self.data_buffer = self.pyarrow_schema.empty_table()
         except Exception as e:
             # add explicit logging, as for some reason meltano doesn't show the message in logs.
             self.logger.error(e)
@@ -53,6 +53,9 @@ class IcebergSink(BatchSink):
         # entire data set in memory to perform it.
         if self.deduplicate_data and not self.upsert_data and not self.overwrite_data:
             raise ConfigValidationError("Deduplication is only allowed when upsert or overwrite is enabled.")
+
+        if self.allow_empty and not self.overwrite_data:
+            raise ConfigValidationError("allow_empty_for_streams only applies to streams in overwrite_data_for_streams.")
 
     @cached_property
     def pyarrow_schema(self):
@@ -105,6 +108,10 @@ class IcebergSink(BatchSink):
     @cached_property
     def upsert_data(self) -> bool:
         return self.is_flag_set_for_streams("upsert_data_for_streams")
+
+    @cached_property
+    def allow_empty(self) -> bool:
+        return self.is_flag_set_for_streams("allow_empty_for_streams")
 
     @cached_property
     def deduplicate_data(self) -> bool:
@@ -211,7 +218,7 @@ class IcebergSink(BatchSink):
         self.logger.info(f"Pyarrow table size: {new_data.nbytes} | ({len(new_data)} rows)")
         if self.overwrite_data:
             # If data is to be overwritten, we buffer it all in memory and write at the end
-            self.data_buffer = pa.concat_tables([self.data_buffer, new_data]) if self.data_buffer else new_data
+            self.data_buffer = pa.concat_tables([self.data_buffer, new_data])
         else:
             if self.upsert_data:
                 # Only use deduplicate_table if not using primary key-based deduplication
@@ -230,6 +237,12 @@ class IcebergSink(BatchSink):
     def clean_up(self) -> None:
         """Perform any clean up actions required at end of a stream."""
         if self.overwrite_data:
+            # Checked before the first access to self.table, which can drop and recreate the table.
+            if len(self.data_buffer) == 0 and not self.allow_empty:
+                raise ValueError(
+                    f"Stream {self.stream_name} sent no records, so overwriting would empty "
+                    f"table {self.table_name}. The table is unchanged. If this stream can be "
+                    f"empty at the source, add it to allow_empty_for_streams.")
             if self.deduplicate_data:
                 self.logger.info(f'Deduplicating data')
                 self.data_buffer = deduplicate_table(self.data_buffer)
